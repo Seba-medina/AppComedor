@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#073d29">
+  <meta name="description" content="Prototipo de reservas semanales del Comedor de la UNER.">
+  <title>Reservas · El Comedor de la UNER</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23073d29'/%3E%3Cpath d='M13 36h38a19 19 0 0 1-38 0M10 31h44' fill='none' stroke='%23fff7e9' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='18' r='5' fill='%23ff7900'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#inicio" aria-label="El Comedor de la UNER, inicio"><span class="brand-icon">✳</span><span><strong>El Comedor</strong><small>DE LA UNER</small></span></a>
+    <nav class="view-nav" aria-label="Vista de demostración">
+      <button class="nav-button active" data-view="student" aria-pressed="true">Mi reserva</button>
+      <button class="nav-button" data-view="admin" aria-pressed="false">Probar panel admin</button>
+    </nav>
+    <div class="user-chip"><span class="avatar">LM</span><span>Lucía Martínez<small>Alumna regular</small></span></div>
+  </header>
+
+  <div class="demo-strip">✦ Prototipo con datos ficticios · Las acciones de esta página no generan reservas reales.</div>
+
+  <main id="inicio">
+    <section id="student-view" class="view" aria-labelledby="student-title">
+      <div class="page-heading"><div><p class="eyebrow">SEMANA DEL 5 AL 9 DE OCTUBRE</p><h1 id="student-title">Armá tu semana<span class="spark">✳</span></h1><p>Elegí los días que venís y completá los detalles de cada comida.</p></div><div class="deadline">◷ &nbsp; Podés reservar hasta las 10:00 de cada día</div></div>
+      <div class="student-layout">
+        <section class="card reservation-card" aria-labelledby="days-title">
+          <div class="section-head"><div><h2 id="days-title">Tu reserva semanal</h2><p>Turno, porciones y restricciones se eligen por día.</p></div><span id="selected-count" class="count-pill">0 días elegidos</span></div>
+          <div id="day-list" class="day-list"></div>
+          <div id="my-history"></div>
+          <div class="reservation-footer"><p>Las bajas se avisan por WhatsApp al comedor.</p><button id="save-button" class="primary-button" type="button">Guardar reserva semanal</button></div>
+          <p id="save-message" class="feedback" role="status" aria-live="polite"></p>
+        </section>
+
+        <aside class="sidebar">
+          <section class="card settings-card"><h2>Mi perfil · demo</h2><p>Las preferencias aparecerán al seleccionar nuevos turnos. El acceso con Google se conectará en la versión real.</p><form id="profile-form"><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><button class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p></form></section>
+          <section class="menu-card" aria-labelledby="menu-title"><div class="menu-card-head"><div><p class="eyebrow">EN EL COMEDOR</p><h2 id="menu-title">Menú de la semana</h2></div><span>✳</span></div><img src="menu-semanal.jpg" alt="Flyer del Comedor de la UNER: lunes curry de cerdo con arroz; martes feriado; miércoles suprema napolitana con puré; jueves pizza; viernes suprema con ensalada." loading="eager"><p>Imagen de referencia proporcionada por el comedor. Las fechas de la demo son ficticias.</p></section>
+          <section class="help-card"><span class="help-star">✦</span><h3>¿Necesitás dar de baja un día?</h3><p>Por ahora, avisá por WhatsApp al privado del comedor.</p></section>
+        </aside>
+      </div>
+    </section>
+
+    <section id="admin-view" class="view" hidden aria-labelledby="admin-title">
+      <div class="page-heading"><div><p class="eyebrow">PANEL DEL COMEDOR · DEMO</p><h1 id="admin-title">La semana, de un vistazo<span class="spark">✳</span></h1><p>Reservas ficticias de la semana del 5 al 9 de octubre.</p></div><span class="week-badge">5 — 9 OCT 2026</span></div>
+      <div class="stats"><div class="stat"><span>Reservas de la semana</span><strong id="total-stat">—</strong><small>Registros por día y turno</small></div><div class="stat"><span>Porciones solicitadas</span><strong id="portions-stat">—</strong><small>Incluye las reservas de ejemplo</small></div><div class="stat"><span>Días bloqueados</span><strong id="blocked-stat">—</strong><small>No admiten nuevas reservas</small></div></div>
+      <div class="admin-layout"><section class="card admin-main"><div class="section-head"><div><h2>Reservas por día</h2><p>Seleccioná un día para ver mediodía y noche.</p></div><select id="admin-day" aria-label="Día para consultar"></select></div><div id="admin-results"></div></section><aside class="admin-side"><section class="card settings-card"><h2>Cargar menú semanal</h2><label>Imagen (JPG, PNG o WebP; hasta 1,5 MB)<input id="menu-upload" type="file" accept="image/jpeg,image/png,image/webp"></label><p>Se guarda únicamente en este navegador durante la demo.</p></section><section class="card settings-card"><h2>Días bloqueados</h2><p>Podés probar el bloqueo en esta demostración.</p><div id="block-controls"></div><p class="fine-print">Bloquear cancela las reservas de ambos horarios. Desbloquear no las restaura.</p></section><section class="card settings-card"><h2>Modalidades temporales</h2><ul id="condition-list" class="condition-list"></ul><form id="condition-form" class="condition-form"><label for="new-condition">Agregar modalidad</label><div id="modality-days" class="modality-days"></div><div><input id="new-condition" name="condition" placeholder="Ej. Curso de cocina" maxlength="45" required><button type="submit" aria-label="Agregar condición">+</button></div></form></section></aside></div>
+    </section>
+  </main>
+  <footer>El Comedor de la UNER <span>✳</span> Vista de demostración · Sin conexión a Firebase ni envío de datos</footer>
+</body>
+</html>

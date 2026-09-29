@@ -1,0 +1,21 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const elements=new Map(),saved=new Map();
+function element(s){if(!elements.has(s))elements.set(s,{value:'',innerHTML:'',textContent:'',handlers:{},addEventListener(k,f){this.handlers[k]=f},classList:{toggle(){}},setAttribute(){}});return elements.get(s);}
+element('#admin-day').value='2026-10-05';
+const context=vm.createContext({document:{querySelector:element,querySelectorAll:()=>[]},localStorage:{getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)},structuredClone,Date,Map,JSON,Number,String,Object,setInterval(){},alert(){},confirm:()=>true});
+vm.runInContext(fs.readFileSync(fs.existsSync('demo/app.js')?'demo/app.js':'app.js','utf8'),context);
+const run=s=>vm.runInContext(s,context),click=()=>element('#save-button').handlers.click();
+run("selected.set('2026-10-05',{})");click();assert.match(element('#save-message').textContent,/al menos un horario/);
+run("selected.set('2026-10-05',{'Mediodía':{portions:1,diet:'Sin TACC',modality:''},'Noche':{portions:2,diet:'',modality:''}})");click();
+assert.equal(run("active().filter(r=>r.uid==='demo').length"),2);
+click();assert.equal(run("active().filter(r=>r.uid==='demo').length"),2);
+element('#block-controls').handlers.click({target:{dataset:{block:'2026-10-05'}}});
+assert.equal(run("active().filter(r=>r.date==='2026-10-05').length"),0);
+assert.equal(run("state.reservations.filter(r=>r.status==='cancelada_por_bloqueo').length"),4);
+element('#block-controls').handlers.click({target:{dataset:{block:'2026-10-05'}}});
+assert.equal(run("active().filter(r=>r.date==='2026-10-05').length"),0);
+assert.equal(run("cutoff('2026-10-05',new Date('2026-10-05T09:59:59-03:00'))"),false);
+assert.equal(run("cutoff('2026-10-05',new Date('2026-10-05T10:00:00-03:00'))"),true);
+assert.equal(JSON.parse(saved.get('appcomedor-demo-v2')).reservations.filter(r=>r.status==='cancelada_por_bloqueo').length,4);
+run("selected.set('2026-10-06',{'Mediodía':{portions:1,diet:'',modality:''}})");click();assert.equal(run("active().filter(r=>r.date==='2026-10-06').length"),0);
+console.log('OK: mínimo un turno, ambos turnos, sin duplicados, bloqueo de ambos turnos, historial, no restauración, corte 10:00, persistencia y rechazo de día bloqueado.');
