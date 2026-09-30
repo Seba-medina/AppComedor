@@ -1,0 +1,14 @@
+{
+  "name": "appcomedor",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/domain.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-appcomedor \"node tests/rules.cjs\""
+  },
+  "devDependencies": {
+    "firebase": "12.19.0",
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase-tools": "^15.0.0",
+    "jsdom": "^27.0.0"
+  }
+}

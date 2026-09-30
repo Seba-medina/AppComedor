@@ -1,0 +1,6 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {"collectionGroup":"menus","fieldPath":"image","indexes":[]}
+  ]
+}

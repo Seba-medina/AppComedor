@@ -1,0 +1,51 @@
+const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),assert=require('node:assert/strict');
+const {createRequire}=require('node:module');
+const deps=createRequire(process.env.APP_TEST_DEPS||path.resolve('tests/package.json'));
+const {JSDOM}=deps('jsdom');
+(async()=>{
+ const domain=await import('../domain.mjs');
+ const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
+ const document=dom.window.document,records=new Map(),listeners=[],writes=[];
+ let authCallback;
+ const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate()+7);
+ const week=next.toISOString().slice(0,10);
+ const ref=(...args)=>({path:args.filter(x=>typeof x==='string').join('/')});
+ const snapshot=r=>{
+  if(r.filter){const list=[...records].filter(([p,d])=>p.startsWith(r.path+'/')&&(!r.field||d[r.field]===r.value));return {docs:list.map(([p,d])=>({id:p.split('/').at(-1),data:()=>d}))};}
+  const data=records.get(r.path);return {exists:()=>!!data,data:()=>data};
+ };
+ const notify=()=>listeners.filter(x=>x.active).forEach(x=>x.cb(snapshot(x.ref)));
+ const set=async(r,d,opts)=>{records.set(r.path,opts?.merge?{...records.get(r.path),...d}:d);writes.push(r.path);notify();};
+ const ctx=vm.createContext({document,console,Date,Map,Number,Object,String,JSON,Intl,Promise,...domain,
+  auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
+  signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onAuthStateChanged:(a,cb)=>{authCallback=cb;cb(null);},
+  doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,w)=>({...r,field:w.field,value:w.value}),where:(field,op,value)=>({field,value}),
+  onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
+  getDoc:async r=>snapshot(r),setDoc:set,
+  writeBatch:()=>{const pending=[];return {set:(r,d)=>pending.push([r,d]),commit:async()=>{for(const [r,d]of pending)await set(r,d);}};},
+  runTransaction:async(db,fn)=>fn({get:async r=>snapshot(r),update:set}),
+  serverTimestamp:()=>({server:true}),Timestamp:{fromDate:d=>d},setInterval(){},confirm:()=>true,prompt:()=>'',FileReader:dom.window.FileReader
+ });
+ vm.runInContext(fs.readFileSync('app.js','utf8').replace(/^import .*;\n/gm,''),ctx);
+ assert.equal(document.querySelector('#admin-nav').hidden,true);
+ assert.equal(document.querySelector('#login-button').hidden,false);
+ const input=document.querySelector('#week-input');input.value=week;input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+ records.set('users/student',{name:'Alumno',condition:'Alumno regular',diet:'Sin TACC',email:'student@example.com'});
+ for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
+ authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
+ assert.equal(document.querySelector('#admin-nav').hidden,true);
+ assert.equal(document.querySelector('#profile-form').hidden,false);
+ const check=selector=>{const e=document.querySelector(selector);assert.ok(e,selector);e.checked=true;e.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
+ check('[data-day="'+week+'"]');
+ check('[data-date="'+week+'"][data-shift="mediodia"]');
+ check('[data-date="'+week+'"][data-shift="noche"]');
+ assert.equal(document.querySelector('[data-field="diet"]').value,'Sin TACC');
+ document.querySelector('#save-button').click();await new Promise(r=>setImmediate(r));
+ assert.equal(writes.filter(p=>p.startsWith('reservations/')).length,2);
+ records.set('days/'+week,{week,blocked:true,generation:1});notify();
+ assert.match(document.querySelector('#my-history').textContent,/Cancelada por bloqueo/);
+ authCallback({uid:'admin',email:domain.ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});
+ assert.equal(document.querySelector('#admin-nav').hidden,false);
+ document.querySelector('#admin-nav').click();assert.equal(document.querySelector('#admin-view').hidden,false);
+ console.log('OK: UI sin sesión, rol alumno/admin, preferencias, ambos turnos, guardado y cancelación actualizada con SDK simulado.');
+})().catch(e=>{console.error(e);process.exitCode=1});

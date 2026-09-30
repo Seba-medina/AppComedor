@@ -1,40 +1,52 @@
-# AppComedor — demo actualizada
+# AppComedor — Firebase
 
-Abrí index.html con styles.css, app.js y menu-semanal.jpg en la misma carpeta.
+Aplicación HTML/CSS/JavaScript publicada desde la rama main en Vercel.
+Firebase Auth (Google) y Firestore guardan perfiles, reservas, días, modalidades y menú.
+No se importan las reservas ficticias ni el almacenamiento local de la demo.
 
-## Funciones de esta versión
+## Activación en Firebase Console
 
-- Reserva de uno o varios días con mediodía, noche o ambos. Se exige al menos un turno por cada día elegido.
-- Porciones y restricciones independientes por turno.
-- Perfil editable con condición habitual y preferencias alimentarias preseleccionadas al elegir nuevos turnos.
-- Modalidades temporales habilitadas para fechas elegidas desde el panel.
-- Bloqueo con aviso: cancela las reservas de ambos turnos, excluye sus porciones de los totales y conserva historial. Desbloquear no restaura reservas.
-- Corte local a las 10:00 de Argentina y carga de imagen semanal.
-- Persistencia en el almacenamiento del mismo navegador; los datos no se comparten entre usuarios ni dispositivos.
+1. Proyecto: appcomedor-6b4f7.
+2. Authentication: habilitar Google y autorizar appomedoruner.vercel.app.
+3. Firestore → Reglas: reemplazar el contenido por el archivo firestore.rules y publicar.
+4. Abrir la web e iniciar sesión con sebastianezequielmedina@gmail.com.
+5. Guardar el perfil, abrir Panel del comedor, elegir el lunes y habilitar la semana.
+6. Cargar la imagen del menú y bloquear fechas sin servicio.
+7. Probar una cuenta de alumno: solo debe consultar su perfil y reservas.
 
-La semana del 5 al 9 de octubre de 2026 y las personas son ficticias. La foto original es de referencia.
+Mientras no se publiquen las reglas, el login puede funcionar pero la base rechazará lecturas y escrituras. El código no despliega las reglas automáticamente.
 
-## Publicar en Vercel
+## Roles y seguridad
 
-Con Node.js instalado, abrí una terminal en esta carpeta y ejecutá:
+El administrador inicial se reconoce por email verificado y proveedor Google, tanto en la interfaz como en reglas. Cambiar el perfil no cambia permisos. Para agregar un administrador institucional hay que actualizar ADMIN_EMAIL en domain.mjs y admin() en firestore.rules; conviene migrar luego a roles por UID o custom claims.
 
-    npx vercel login
-    npx vercel
+Los alumnos consultan sus reservas mediante una consulta por uid. La base rechaza lecturas de terceros, roles inventados en perfiles, reservas duplicadas, porciones fuera de 1–4, modalidades inexistentes/desactivadas, días bloqueados y reservas desde las 10:00 de Argentina. La validación usa request.time del servidor.
 
-Seguí las preguntas para crear un proyecto llamado appcomedor en tu cuenta. Para este HTML elegí Other si pregunta el framework y dejá vacíos los comandos de compilación. Revisá el enlace de vista previa y, para publicar en producción, ejecutá:
+## Bloqueo y cancelaciones
 
-    npx vercel --prod
+days/{YYYY-MM-DD} contiene una generación que aumenta al bloquear. Cada reserva guarda esa generación, y su clave incluye uid, fecha, turno y generación. Una reserva es activa solo si su generación coincide con el día, no está bloqueado y no fue dada de baja.
 
-Alternativa con GitHub: subí los archivos de esta carpeta a un repositorio e importalo desde Add New → Project en Vercel; framework Other, sin build command y salida en la raíz. Las siguientes actualizaciones del repositorio generarán despliegues.
+El cambio del día invalida todas las reservas de ambos turnos en una sola transacción. El desbloqueo conserva la generación: las reservas antiguas siguen canceladas. Reservar nuevamente crea documentos distintos y preserva el historial. No hay un estado de cancelación escrito masivamente en cada documento: el estado operativo se calcula con el día. Cualquier exportación o informe futuro debe usar la misma regla.
 
-Documentación oficial: https://vercel.com/docs/cli/deploy y https://vercel.com/docs/builds/configure-a-build
+Las bajas solicitadas por WhatsApp se aplican desde el panel por reserva. Una reserva dada de baja no puede reactivarse desde el alumno.
 
-## Alcance pendiente
+## Menú sin Firebase Storage
 
-Esto sigue siendo una demo. El botón Probar panel admin está disponible para mostrar ambos roles y no protege datos. No hay login real con Google ni backend. Firebase Auth, Firestore y validación de hora, permisos y bloqueos en servidor son necesarios antes de admitir reservas reales. La carga de imágenes es local, sin Cloudinary.
+Para esta primera versión, una imagen semanal de hasta 500 KB se guarda en el documento menus/{lunes}, como data URL. Este límite mantiene el documento por debajo de 1 MiB y permite empezar sin Storage ni configuración de Cloudinary. Para imágenes grandes o más volumen se debe migrar a almacenamiento de archivos y conservar solo la URL en Firestore.
 
-El perfil afecta nuevas selecciones y las reservas reenviadas; no modifica automáticamente reservas anteriores. Las bajas de reservas confirmadas continúan por WhatsApp.
+firestore.indexes.json excluye image de los índices. Si se utiliza Firebase CLI, firebase deploy --only firestore despliega reglas e índices con una cuenta autorizada. En Console también se puede crear una excepción de indexación para menus.image.
 
-## Verificación
+## Pruebas
 
-Sintaxis de JavaScript comprobada. Pruebas automatizadas de lógica mediante un DOM simulado: mínimo un turno, ambos horarios, ausencia de duplicados, bloqueo/cancelación, historial, desbloqueo, corte horario y persistencia. No equivalen a una prueba visual en un navegador ni a pruebas de servidor.
+    node --test tests/domain.test.mjs
+
+Para las pruebas de reglas, instalar las dependencias de tests/package.json (npm install --prefix tests) y ejecutar con Java 21 o superior y Firebase CLI disponible:
+
+    firebase emulators:exec --only firestore --project demo-appcomedor "node tests/rules.cjs"
+
+No apuntar estas pruebas al proyecto real. Se probaron autenticación, restricciones de acceso, perfiles, ambos turnos, duplicados, hora del servidor, bloqueo/desbloqueo, conservación del historial, modalidades, permisos del menú y una reserva semanal de diez turnos en una operación. La UI se comprobó con JSDOM y un SDK simulado (tests/ui.cjs): roles, preferencias, ambos turnos, guardado y actualización de cancelaciones. Falta la prueba completa en producción con cuentas reales, después de publicar las reglas.
+
+Referencias oficiales:
+- https://firebase.google.com/docs/web/alt-setup
+- https://firebase.google.com/docs/firestore/security/rules-conditions
+- https://firebase.google.com/docs/firestore/security/test-rules-emulator
