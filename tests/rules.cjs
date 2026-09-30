@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {createRequire}=require('node:module');
 const deps=createRequire(process.env.APP_TEST_DEPS || path.resolve('tests/package.json'));
 const {initializeTestEnvironment,assertSucceeds,assertFails}=deps('@firebase/rules-unit-testing');
-const {doc,setDoc,getDoc,getDocs,collection,query,where,Timestamp,serverTimestamp,writeBatch}=deps('firebase/firestore');
+const {doc,setDoc:rawSetDoc,getDoc,getDocs,collection,query,where,Timestamp,serverTimestamp,writeBatch}=deps('firebase/firestore');
 const assert=require('node:assert/strict');
 (async()=>{
  const env=await initializeTestEnvironment({projectId:'demo-appcomedor',firestore:{rules:fs.readFileSync('firestore.rules','utf8'),host:'127.0.0.1',port:8080}});
@@ -19,6 +19,15 @@ const assert=require('node:assert/strict');
  const day=key=>({week:key,blocked:false,generation:0,cutoff:cutoff(key),reason:'',updatedBy:'admin',updatedAt:serverTimestamp()});
  const slot=(key,shift='mediodia',generation=0)=>({uid:'student',dateKey:key,week:key,shift,generation,portions:1,diet:'Sin TACC',name:profile.name,condition:profile.condition,modalityId:'',cancelled:false,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
  const id=(key,shift='mediodia',g=0)=>['student',key,shift,g].join('_');
+ const setDoc=async(ref,data)=>{
+  if(!ref.path.startsWith('reservations/'))return rawSetDoc(ref,data);
+  const old=await getDoc(ref).catch(()=>null);if(old?.exists())data={...data,createdAt:old.data().createdAt};
+  const otherId=[data.uid,data.dateKey,data.shift==='mediodia'?'noche':'mediodia',data.generation].join('_');
+  const otherRef=doc(ref.firestore,'reservations',otherId),otherDoc=await getDoc(otherRef).catch(()=>null);
+  if(otherDoc?.exists())return rawSetDoc(ref,data);
+  const b=writeBatch(ref.firestore);b.set(ref,data);b.set(otherRef,{...data,shift:data.shift==='mediodia'?'noche':'mediodia',portions:0,modalityId:''});return b.commit();
+ };
+
  try {
   await assertFails(setDoc(doc(guest,'users','student'),profile));
   await assertSucceeds(setDoc(doc(student,'users','student'),profile));
@@ -31,8 +40,13 @@ const assert=require('node:assert/strict');
   await assertFails(setDoc(doc(admin,'days',future),{...day(future),cutoff:Timestamp.fromMillis(Date.now()+86400000*60)}));
   await assertSucceeds(setDoc(doc(student,'reservations',id(future)),slot(future)));
   await assertSucceeds(setDoc(doc(student,'reservations',id(future,'noche')),slot(future,'noche')));
+
+  const swap=writeBatch(student);swap.set(doc(student,'reservations',id(future)),{portions:2,updatedAt:serverTimestamp()},{merge:true});swap.set(doc(student,'reservations',id(future,'noche')),{portions:0,updatedAt:serverTimestamp()},{merge:true});await assertSucceeds(swap.commit());
+  const excessive=writeBatch(student);for(const shift of ['mediodia','noche'])excessive.set(doc(student,'reservations',id(future,shift)),{portions:2,updatedAt:serverTimestamp()},{merge:true});await assertFails(excessive.commit());
+  const restore=writeBatch(student);for(const shift of ['mediodia','noche'])restore.set(doc(student,'reservations',id(future,shift)),{portions:1,updatedAt:serverTimestamp()},{merge:true});await assertSucceeds(restore.commit());
   await assertFails(setDoc(doc(student,'reservations','duplicado'),slot(future)));
   await assertFails(setDoc(doc(student,'reservations',id(future)),{...slot(future),portions:99}));
+  await assertFails(setDoc(doc(student,'reservations',id(future)),{...slot(future),portions:2}));
   await assertFails(getDoc(doc(other,'reservations',id(future))));
   await assertSucceeds(getDocs(query(collection(student,'reservations'),where('uid','==','student'))));
   await assertFails(getDocs(collection(student,'reservations')));

@@ -20,6 +20,7 @@ export function weekDays(start) {
 export const deadline = key => new Date(key + 'T10:00:00-03:00');
 export const reservationId = (uid,key,shift,generation) => [uid,key,shift,generation].join('_');
 export function reservationStatus(r,day) {
+  if (r.portions===0) return 'Turno cambiado';
   if (r.cancelled) return 'Baja gestionada por el comedor';
   if (!day) return 'Sin información del día';
   if (day.blocked || r.generation!==day.generation) return 'Cancelada por bloqueo';
@@ -31,7 +32,8 @@ export function validateSelections(selected,days,profile,now=new Date()) {
   if(!entries.length) throw new Error('Elegí al menos un día habilitado antes de las 10:00.');
   for(const [,turns] of entries) {
     if(!Object.keys(turns).length) throw new Error('Marcá al menos un horario en cada día elegido.');
-    for(const [shift,r] of Object.entries(turns)) if(!SHIFTS.includes(shift)||!Number.isInteger(r.portions)||r.portions<1||r.portions>4) throw new Error('Revisá los turnos y porciones.');
+    if(Object.values(turns).reduce((n,r)=>n+r.portions,0)>2)throw new Error('El máximo es de 2 porciones por día, sumando mediodía y noche.');
+    for(const [shift,r] of Object.entries(turns)) if(!SHIFTS.includes(shift)||!Number.isInteger(r.portions)||r.portions<1||r.portions>2) throw new Error('Revisá los turnos y porciones.');
   }
   return entries;
 }

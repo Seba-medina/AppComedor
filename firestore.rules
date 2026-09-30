@@ -49,6 +49,14 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /modalities/{id} {
+      function dailyLimit(d) {
+        let otherShift = d.shift == 'mediodia' ? 'noche' : 'mediodia';
+        let otherId = d.uid+'_'+d.dateKey+'_'+otherShift+'_'+string(d.generation);
+        let other = getAfter(/databases/$(database)/documents/reservations/$(otherId)).data;
+        return other != null
+          && d.portions + (other.cancelled ? 0 : other.portions) <= 2
+          && d.portions + (other.cancelled ? 0 : other.portions) > 0;
+      }
       function valid(d) {
         return d.keys().hasAll(['name','dates','active','updatedAt'])
           && d.keys().hasOnly(['name','dates','active','updatedAt'])
@@ -72,6 +80,14 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /reservations/{id} {
+      function dailyLimit(d) {
+        let otherShift = d.shift == 'mediodia' ? 'noche' : 'mediodia';
+        let otherId = d.uid+'_'+d.dateKey+'_'+otherShift+'_'+string(d.generation);
+        let other = getAfter(/databases/$(database)/documents/reservations/$(otherId)).data;
+        return other != null
+          && d.portions + (other.cancelled ? 0 : other.portions) <= 2
+          && d.portions + (other.cancelled ? 0 : other.portions) > 0;
+      }
       function valid(d) {
         let day = get(/databases/$(database)/documents/days/$(d.dateKey)).data;
         let p = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
@@ -81,7 +97,7 @@ service cloud.firestore {
           && d.generation is int && d.generation == day.generation
           && id == d.uid+'_'+d.dateKey+'_'+d.shift+'_'+string(d.generation)
           && !day.blocked && request.time < day.cutoff && d.week == day.week
-          && d.portions is int && d.portions>=1 && d.portions<=4
+          && d.portions is int && d.portions>=0 && d.portions<=2 && dailyLimit(d)
           && shortText(d.diet,100) && d.name==p.name && d.condition==p.condition
           && d.modalityId is string
           && (d.modalityId == '' || (
