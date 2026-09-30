@@ -7,7 +7,7 @@ const {JSDOM}=deps('jsdom');
  const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
  const document=dom.window.document,records=new Map(),listeners=[],writes=[];
  let authCallback;
- const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate()+7);
+ const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate());
  const week=next.toISOString().slice(0,10);
  const ref=(...args)=>({path:args.filter(x=>typeof x==='string').join('/')});
  const snapshot=r=>{
@@ -16,7 +16,7 @@ const {JSDOM}=deps('jsdom');
  };
  const notify=()=>listeners.filter(x=>x.active).forEach(x=>x.cb(snapshot(x.ref)));
  const set=async(r,d,opts)=>{records.set(r.path,opts?.merge?{...records.get(r.path),...d}:d);writes.push(r.path);notify();};
- const ctx=vm.createContext({document,console,Date,Map,Number,Object,String,JSON,Intl,Promise,...domain,
+ const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
   auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
   signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onAuthStateChanged:(a,cb)=>{authCallback=cb;cb(null);},
   doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,w)=>({...r,field:w.field,value:w.value}),where:(field,op,value)=>({field,value}),
@@ -29,7 +29,11 @@ const {JSDOM}=deps('jsdom');
  vm.runInContext(fs.readFileSync('app.js','utf8').replace(/^import .*;\n/gm,''),ctx);
  assert.equal(document.querySelector('#admin-nav').hidden,true);
  assert.equal(document.querySelector('#login-button').hidden,false);
- const input=document.querySelector('#week-input');input.value=week;input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+ assert.equal(document.querySelector('#week-input'),null);
+ assert.equal(document.querySelector('#profile-panel').hidden,true);
+ document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,false);
+ document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,true);
+ assert.equal(document.querySelector('.sidebar').firstElementChild.className,'menu-card');
  records.set('users/student',{name:'Alumno',condition:'Alumno regular',diet:'Sin TACC',email:'student@example.com'});
  for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
  authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});

@@ -67,7 +67,7 @@ function renderAdmin(){
 function rebuildWeekControls(){
   if(!dates().includes(adminDate))adminDate=dates()[0];
   $('#modality-days').innerHTML=dates().map(date=>'<label><input type="checkbox" name="modality-day" value="'+date+'"> '+esc(label(date))+'</label>').join('');
-  $('#week-caption').textContent='SEMANA DEL '+dates()[0]+' AL '+dates()[4];
+  $('#week-caption').textContent='ESTA SEMANA · '+label(dates()[0])+' al '+label(dates()[4]);
   $('.week-badge').textContent=dates()[0]+' — '+dates()[4];
 }
 function watchMenu(){
@@ -110,6 +110,7 @@ onAuthStateChanged(auth,u=>{
   epoch++;resetData();user=u;isAdmin=!!u?.emailVerified&&u.email===ADMIN_EMAIL;
   $('#login-button').hidden=!!u;$('#logout-button').hidden=!u;
   $('#admin-nav').hidden=!isAdmin;$('#profile-form').hidden=!u;
+  if(!u){$('#profile-panel').hidden=true;$('#profile-toggle').setAttribute('aria-expanded','false');}
   $('#profile-intro').textContent=u?'Guardá tus datos y preferencias para completar tus reservas.':'Iniciá sesión con Google para completar tu perfil.';
   $('.user-chip').textContent=u?.displayName||u?.email||'Sin sesión';
   $('#admin-view').hidden=true;$('#student-view').hidden=false;
@@ -171,9 +172,8 @@ document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',(
 }));
 $('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
 $('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!dataReady||!reservationsReady)return;downloadPdf(dailyTableReport(adminDate,current(),days[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
-$('#week-input').value=week;
-$('#week-input').addEventListener('change',e=>{try{weekDays(e.target.value);if(dirty.size&&!confirm('Cambiar de semana descarta cambios sin guardar. ¿Continuar?')){e.target.value=week;return;}week=e.target.value;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderDays();renderAdmin();}catch(err){e.target.value=week;error(err);}});
+$('#profile-toggle').addEventListener('click',()=>{const open=$('#profile-panel').hidden;$('#profile-panel').hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.
-setInterval(()=>{if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
+setInterval(()=>{const nowWeek=monday();if(nowWeek!==week){week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
