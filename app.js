@@ -1,4 +1,4 @@
-import {dailyReportLines,downloadPdf} from './daily-pdf.mjs';
+import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {collection,doc,query,where,onSnapshot,getDoc,setDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
@@ -170,7 +170,7 @@ document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',(
   const admin=b.dataset.view==='admin';if(admin&&!isAdmin)return;$('#admin-view').hidden=!admin;$('#student-view').hidden=admin;document.querySelectorAll('.nav-button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderAdmin();
 }));
 $('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
-$('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!dataReady||!reservationsReady)return;downloadPdf(dailyReportLines(adminDate,current(),days[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
+$('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!dataReady||!reservationsReady)return;downloadPdf(dailyTableReport(adminDate,current(),days[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
 $('#week-input').value=week;
 $('#week-input').addEventListener('change',e=>{try{weekDays(e.target.value);if(dirty.size&&!confirm('Cambiar de semana descarta cambios sin guardar. ¿Continuar?')){e.target.value=week;return;}week=e.target.value;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderDays();renderAdmin();}catch(err){e.target.value=week;error(err);}});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
