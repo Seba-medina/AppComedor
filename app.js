@@ -1,3 +1,4 @@
+import {dailyReportLines,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {collection,doc,query,where,onSnapshot,getDoc,setDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
@@ -6,6 +7,7 @@ import {ADMIN_EMAIL,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,res
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
+let adminDate=week;
 let dataReady=false,reservationsReady=false,busy=false,epoch=0,unsubs=[],menuUnsub;
 const selected=new Map(),dirty=new Set();
 const dates=()=>weekDays(week);
@@ -49,7 +51,10 @@ function renderAdmin(){
   if(!isAdmin)return;
   const live=current().filter(isActive);
   $('#total-stat').textContent=live.length;$('#portions-stat').textContent=live.reduce((sum,r)=>sum+r.portions,0);$('#blocked-stat').textContent=Object.values(days).filter(d=>d.blocked).length;
-  const day=$('#admin-day').value;
+  const day=adminDate;
+  $('#admin-days').innerHTML=dates().map((date,i)=>'<button type="button" data-admin-date="'+date+'" aria-pressed="'+(date===day)+'"><strong>'+['Lunes','Martes','Miércoles','Jueves','Viernes'][i]+'</strong><small>'+date.slice(8,10)+'/'+date.slice(5,7)+'</small></button>').join('');
+  $('#admin-day-title').textContent=label(day)+(days[day]?.blocked?' · Día bloqueado':'');
+  $('#download-day-pdf').disabled=!dataReady||!reservationsReady;
   $('#admin-results').innerHTML=SHIFTS.map(shift=>{
     const rows=live.filter(r=>r.dateKey===day&&r.shift===shift);
     return '<div class="shift"><h3>'+shiftLabel(shift)+'<span>'+rows.length+' reservas · '+rows.reduce((sum,r)=>sum+r.portions,0)+' porciones</span></h3>'+(rows.map(r=>'<div class="person"><strong>'+esc(r.name)+'</strong><span>'+esc(r.condition)+' · '+r.portions+' porciones'+(r.modalityId?' · '+esc(modalities.find(c=>c.id===r.modalityId)?.name||'Modalidad especial'):'')+'</span><span>'+esc(r.diet||'—')+'</span><button data-cancel="'+esc(r.id)+'">Dar de baja</button></div>').join('')||'<p>Sin reservas activas.</p>')+'</div>';
@@ -60,7 +65,7 @@ function renderAdmin(){
   $('#users-list').innerHTML=users.map(p=>'<div class="person"><strong>'+esc(p.name)+'</strong><span>'+esc(p.email)+'</span><span>'+esc(p.condition)+' · '+esc(p.diet||'Sin preferencias')+'</span></div>').join('')||'<p>No hay perfiles registrados.</p>';
 }
 function rebuildWeekControls(){
-  $('#admin-day').innerHTML=dates().map(date=>'<option value="'+date+'">'+esc(label(date))+'</option>').join('');
+  if(!dates().includes(adminDate))adminDate=dates()[0];
   $('#modality-days').innerHTML=dates().map(date=>'<label><input type="checkbox" name="modality-day" value="'+date+'"> '+esc(label(date))+'</label>').join('');
   $('#week-caption').textContent='SEMANA DEL '+dates()[0]+' AL '+dates()[4];
   $('.week-badge').textContent=dates()[0]+' — '+dates()[4];
@@ -164,7 +169,8 @@ $('#menu-upload').addEventListener('change',e=>{const file=e.target.files[0];if(
 document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',()=>{
   const admin=b.dataset.view==='admin';if(admin&&!isAdmin)return;$('#admin-view').hidden=!admin;$('#student-view').hidden=admin;document.querySelectorAll('.nav-button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderAdmin();
 }));
-$('#admin-day').addEventListener('change',renderAdmin);
+$('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
+$('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!dataReady||!reservationsReady)return;downloadPdf(dailyReportLines(adminDate,current(),days[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
 $('#week-input').value=week;
 $('#week-input').addEventListener('change',e=>{try{weekDays(e.target.value);if(dirty.size&&!confirm('Cambiar de semana descarta cambios sin guardar. ¿Continuar?')){e.target.value=week;return;}week=e.target.value;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderDays();renderAdmin();}catch(err){e.target.value=week;error(err);}});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
