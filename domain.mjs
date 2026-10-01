@@ -22,7 +22,7 @@ export const deadline = key => new Date(key + 'T10:00:00-03:00');
 export const reservationId = (uid,key,shift,generation) => [uid,key,shift,generation].join('_');
 export function reservationStatus(r,day) {
   if (r.portions===0) return 'Turno cambiado';
-  if (r.cancelled) return 'Baja gestionada por el comedor';
+  if (r.cancelled) return 'Cancelada';
   if (!day) return 'Sin información del día';
   if (day.blocked || r.generation!==day.generation) return 'Cancelada por bloqueo';
   return 'Confirmada';

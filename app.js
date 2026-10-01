@@ -66,7 +66,7 @@ function renderDays(){
   }).join('');
   $('#selected-count').textContent=selected.size+' días elegidos';
   const mine=current().filter(r=>r.uid===user?.uid&&r.portions>0);
-  $('#my-history').innerHTML=mine.length?'<h3>Mis reservas</h3>'+mine.map(r=>'<p>'+esc(label(r.dateKey))+' · '+shiftLabel(r.shift)+' · '+r.portions+' porciones · <strong>'+esc(reservationStatus(r,days[r.dateKey]))+'</strong></p>').join(''):'';
+  $('#my-history').innerHTML=mine.length?'<h3>Mis reservas</h3>'+mine.map(r=>'<p>'+esc(label(r.dateKey))+' · '+shiftLabel(r.shift)+' · '+r.portions+' porciones · <strong>'+esc(reservationStatus(r,days[r.dateKey]))+'</strong>'+ (isActive(r)&&Date.now()<deadline(r.dateKey)?' <button type="button" data-cancel-own="'+esc(r.id)+'" '+(busy?'disabled':'')+'>Cancelar reserva</button>':'')+'</p>').join(''):'';
 }
 function renderAdmin(){
   if(!isAdmin)return;
@@ -154,7 +154,7 @@ $('#day-list').addEventListener('change',e=>{
   const t=e.target,key=t.dataset.day||t.dataset.date;
   if(!key||!profile||!days[key]||days[key].blocked||Date.now()>=deadline(key))return;
   const existing=shift=>current().some(r=>r.uid===user.uid&&r.dateKey===key&&(!shift||r.shift===shift)&&isActive(r));
-  if(t.dataset.day){if(t.checked)selected.set(key,{});else if(existing()){t.checked=true;$('#save-message').textContent='Para dar de baja una reserva, avisá por WhatsApp.';return;}else selected.delete(key);}
+  if(t.dataset.day){if(t.checked)selected.set(key,{});else if(existing()){t.checked=true;$('#save-message').textContent='Para cancelar, usá el botón Cancelar reserva en Mis reservas.';return;}else selected.delete(key);}
   else if(t.dataset.shift){const shift=t.dataset.shift;if(t.checked)selected.get(key)[shift]={portions:1,diet:profile.diet,modalityId:''};else delete selected.get(key)[shift];}
   else if(t.dataset.field){selected.get(key)[t.dataset.shiftField][t.dataset.field]=t.dataset.field==='portions'?Number(t.value):t.value;dirty.add(key);renderDays();return;}
   dirty.add(key);renderDays();
@@ -165,12 +165,20 @@ $('#save-button').addEventListener('click',()=>action(async()=>{
   for(const [dateKey,turns]of entries)for(const shift of SHIFTS){
     const generation=days[dateKey].generation,id=reservationId(user.uid,dateKey,shift,generation),old=reservations.find(x=>x.id===id);
     const r=turns[shift]||{portions:0,diet:profile.diet,modalityId:''};
-    if(old?.cancelled){if(turns[shift])throw new Error('Este turno fue dado de baja por el comedor. Contactá al administrador.');continue;}
+    if(old?.cancelled){if(turns[shift])throw new Error('Este turno fue cancelado. Contactá al administrador si necesitás recuperarlo.');continue;}
     if(r.modalityId&&!modalities.some(c=>c.id===r.modalityId&&c.active&&c.dates.includes(dateKey)))throw new Error('Revisá las modalidades: una opción dejó de estar habilitada.');
     batch.set(doc(db,'reservations',id),{uid:user.uid,dateKey,week,shift,generation,portions:r.portions,diet:r.diet.trim(),modalityId:r.modalityId,name:profile.name,condition:profile.condition,cancelled:false,createdAt:old?.createdAt||serverTimestamp(),updatedAt:serverTimestamp()});
   }
   await batch.commit();dirty.clear();$('#save-message').textContent='✓ Tu reserva quedó confirmada. Revisá el detalle en Mis reservas.';$('#app-status').textContent='Reservas confirmadas.';
 }));
+$('#my-history').addEventListener('click',e=>{const id=e.target.dataset.cancelOwn;if(!id||!user||!dataReady||!reservationsReady)return;action(async()=>{
+  const r=reservations.find(x=>x.id===id&&x.uid===user.uid);
+  if(!r||!isActive(r))throw new Error('Esta reserva ya no está activa.');
+  if(Date.now()>=deadline(r.dateKey))throw new Error('Solo podés cancelar antes de las 10:00 del día reservado.');
+  if(!confirm('¿Cancelar '+r.portions+' porciones del '+label(r.dateKey)+' en el turno '+shiftLabel(r.shift)+'? Para recuperar una reserva cancelada deberás contactar al comedor.'))return;
+  await setDoc(doc(db,'reservations',id),{cancelled:true,updatedAt:serverTimestamp()},{merge:true});
+  dirty.delete(r.dateKey);hydrate();$('#app-status').textContent='Reserva cancelada. El contador de porciones se actualizó.';
+});});
 $('#activate-week').addEventListener('click',()=>action(async()=>{
   const batch=writeBatch(db);
   for(const key of dates()){const ref=doc(db,'days',key),s=await getDoc(ref);if(!s.exists())batch.set(ref,{week,blocked:false,generation:0,cutoff:Timestamp.fromDate(deadline(key)),reason:'',updatedBy:user.uid,updatedAt:serverTimestamp()});}

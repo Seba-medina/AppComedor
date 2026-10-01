@@ -117,7 +117,12 @@ service cloud.firestore {
         (valid(request.resource.data) && !resource.data.cancelled
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['portions','diet','modalityId','name','condition','updatedAt'])
           && request.resource.data.createdAt == resource.data.createdAt)
-        || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelled','updatedAt'])
+        || ((admin() || (resource.data.uid == request.auth.uid
+          && !resource.data.cancelled && resource.data.portions > 0
+          && !get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.blocked
+          && resource.data.generation == get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.generation
+          && request.time < get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.cutoff))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelled','updatedAt'])
           && request.resource.data.cancelled == true && request.resource.data.updatedAt==request.time));
       allow delete: if admin() && removableAccount(resource.data.uid);
     }

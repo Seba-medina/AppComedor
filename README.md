@@ -54,3 +54,5 @@ Referencias oficiales:
 ## Revisión de seguridad
 
 Ver SECURITY.md para cambios, pruebas, límites conocidos y activación pendiente de App Check.
+
+Los usuarios pueden cancelar cada turno desde Mis reservas antes de las 10:00 (Argentina). Se conserva el historial y se descuentan las porciones. Una cancelación no puede revertirse desde la cuenta del alumno. Publicar las reglas de Firestore actualizadas para habilitar esta operación.
