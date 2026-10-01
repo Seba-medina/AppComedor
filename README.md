@@ -60,3 +60,7 @@ Los usuarios pueden cancelar cada turno desde Mis reservas antes de las 10:00 (A
 ## Respaldo de datos
 
 El panel administrador permite descargar un respaldo JSON de todos los perfiles, días, modalidades, menús y reservas de todas las semanas. Lecturas directas del servidor; no se genera una copia parcial ante errores. Ver `BACKUPS.md` para guardar las copias y recuperar documentos faltantes con simulación previa. La recuperación requiere credenciales del responsable en su computadora; nunca en la página.
+
+## Asistencias y última conexión
+
+El administrador marca Asistió este día en el listado diario. Una persona suma un solo día aunque vaya a ambos turnos; desmarcar corrige el registro. Solo se admiten fechas de hoy o anteriores. Usuarios registrados muestra el total histórico de días marcados y la última apertura de la app con sesión iniciada (hora Argentina). No es un indicador de conexión en tiempo real ni reconstruye accesos o asistencias anteriores a su activación. Requiere publicar las reglas actualizadas de `attendance` y `userActivity`. Los respaldos v2 incluyen ambos registros y eliminar un usuario también los elimina.

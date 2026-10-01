@@ -4,8 +4,8 @@ import {pathToFileURL} from 'node:url';
 export async function restoreMissing(db,backup,{apply=false,uid=null,makeTimestamp}={}){
   validateBackup(backup);
   const summary={missing:0,existing:0,restored:0};
-  for(const name of BACKUP_COLLECTIONS)for(const row of backup.collections[name]){
-    if(uid&&!(name==='users'&&row.id===uid||name==='reservations'&&row.data.uid===uid))continue;
+  for(const name of BACKUP_COLLECTIONS)for(const row of (backup.collections[name]||[])){
+    if(uid&&!(['users','userActivity'].includes(name)&&row.id===uid||['reservations','attendance'].includes(name)&&row.data.uid===uid))continue;
     const ref=db.collection(name).doc(row.id),data=decodeBackupValue(row.data,makeTimestamp);
     if(!apply){if((await ref.get()).exists)summary.existing++;else summary.missing++;continue;}
     const created=await db.runTransaction(async tx=>{if((await tx.get(ref)).exists)return false;tx.create(ref,data);return true;});

@@ -35,3 +35,5 @@
 .danger-button{border:1px solid #dfb9a7;border-radius:8px;padding:8px 11px;background:#fff5ee;color:#9c421e;font-weight:700;font-size:12px;white-space:nowrap}.danger-button:hover{background:#fbe3d6}.danger-button:disabled{opacity:.45}.admin-protected{font-size:12px;color:#4b6852;font-weight:700}.condition-list li>span{flex:1;min-width:0}.condition-list li{flex-wrap:wrap}.condition-list button.danger-button{border-color:#dfb9a7;background:#fff5ee;color:#9c421e}#user-delete-message:not(:empty){padding:12px;background:#f5f0e5;border-radius:9px;font-size:13px}
 
 .day-collapse{font-size:12px;padding:7px 11px;white-space:nowrap;flex-shrink:0}.day-top{flex-wrap:wrap}.day-row [id^="details-"][hidden]{display:none}
+
+.users-table-wrap{overflow-x:auto}.users-table{width:100%;border-collapse:collapse;font-size:13px}.users-table th,.users-table td{padding:12px 10px;border-bottom:1px solid #dce4d8;text-align:left;vertical-align:middle}.users-table th{background:#edf3e7}.users-table small{color:#647663}.attendance-control{display:flex;align-items:center;gap:8px;font-size:13px}.attendance-control input{width:18px;height:18px}

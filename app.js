@@ -3,12 +3,15 @@ import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {collection,doc,query,where,onSnapshot,getDoc,getDocs,getDocsFromServer,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
+import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,argentinaToday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
-let adminDate=week;
+let adminDate=week,attendance=[],activity={},attendanceReady=false,activityReady=false;
+const lastAccess=uid=>{const value=activity[uid]?.lastSeen;if(!activityReady)return 'Cargando…';if(!value?.toDate)return 'Sin registro';return new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'}).format(value.toDate());};
+const attended=(uid,date)=>attendance.some(a=>a.uid===uid&&a.dateKey===date&&a.present);
+const attendanceCount=uid=>new Set(attendance.filter(a=>a.uid===uid&&a.present).map(a=>a.dateKey)).size;
 let dataReady=false,reservationsReady=false,busy=false,epoch=0,unsubs=[],menuUnsub;
 const selected=new Map(),dirty=new Set(),collapsedDays=new Set();
 const dates=()=>weekDays(week);
@@ -81,12 +84,12 @@ function renderAdmin(){
   $('#download-day-pdf').disabled=!dataReady||!reservationsReady;
   $('#admin-results').innerHTML=SHIFTS.map(shift=>{
     const rows=live.filter(r=>r.dateKey===day&&r.shift===shift);
-    return '<div class="shift"><h3>'+shiftLabel(shift)+'<span>'+rows.length+' reservas · '+rows.reduce((sum,r)=>sum+r.portions,0)+' porciones</span></h3>'+(rows.map(r=>'<div class="person"><strong>'+esc(r.name)+'</strong><span>'+esc(r.condition)+' · '+r.portions+' porciones'+(r.modalityId?' · '+esc(modalities.find(c=>c.id===r.modalityId)?.name||'Modalidad especial'):'')+'</span><span>'+esc(r.diet||'—')+'</span><button data-cancel="'+esc(r.id)+'">Dar de baja</button></div>').join('')||'<p>Sin reservas activas.</p>')+'</div>';
+    return '<div class="shift"><h3>'+shiftLabel(shift)+'<span>'+rows.length+' reservas · '+rows.reduce((sum,r)=>sum+r.portions,0)+' porciones</span></h3>'+(rows.map(r=>'<div class="person"><strong>'+esc(r.name)+'</strong><span>'+esc(r.condition)+' · '+r.portions+' porciones'+(r.modalityId?' · '+esc(modalities.find(c=>c.id===r.modalityId)?.name||'Modalidad especial'):'')+'</span><span>'+esc(r.diet||'—')+'</span><label class="attendance-control"><input type="checkbox" data-attendance="'+esc(r.uid)+'" '+(attended(r.uid,day)?'checked ':'')+(!attendanceReady||busy||day>argentinaToday()?'disabled':'')+'> Asistió este día</label><button data-cancel="'+esc(r.id)+'">Dar de baja</button></div>').join('')||'<p>Sin reservas activas.</p>')+'</div>';
   }).join('');
   $('#admin-results').innerHTML+='<h3>Cancelaciones</h3>'+(current().filter(r=>r.dateKey===day&&!isActive(r)).map(r=>'<p>'+esc(r.name)+' · '+shiftLabel(r.shift)+' · '+esc(reservationStatus(r,days[r.dateKey]))+'</p>').join('')||'<p>Sin cancelaciones.</p>');
   $('#block-controls').innerHTML=dates().map(date=>'<div class="block-row"><span>'+esc(label(date))+'</span><button data-block="'+date+'" '+(!days[date]?'disabled':'')+'>'+(days[date]?.blocked?'Desbloquear':'Bloquear')+'</button></div>').join('');
   $('#condition-list').innerHTML=modalities.filter(c=>c.dates.some(d=>dates().includes(d))).map(c=>'<li><span>'+esc(c.name)+'<small>'+c.dates.map(esc).join(', ')+'</small></span><button data-modality="'+esc(c.id)+'">'+(c.active?'Desactivar':'Activar')+'</button><button class="danger-button" data-delete-modality="'+esc(c.id)+'">Eliminar</button></li>').join('');
-  $('#users-list').innerHTML=users.map(p=>'<div class="person"><strong>'+esc(p.name)+'</strong><span>'+esc(p.email)+'</span><span>'+esc(p.condition)+' · '+esc(p.diet||'Sin preferencias')+'</span>'+(ADMIN_EMAILS.includes(p.email)?'<span class="admin-protected">Administrador · protegido</span>':'<button class="danger-button" data-delete-user="'+esc(p.id)+'">Eliminar cuenta</button>')+'</div>').join('')||'<p>No hay perfiles registrados.</p>';
+  $('#users-list').innerHTML=users.length?'<div class="users-table-wrap"><table class="users-table"><thead><tr><th>Usuario</th><th>Condición / preferencias</th><th>Última conexión</th><th>Días asistidos</th><th>Acciones</th></tr></thead><tbody>'+users.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong><br><small>'+esc(p.email)+'</small></td><td>'+esc(p.condition)+'<br><small>'+esc(p.diet||'Sin preferencias')+'</small></td><td>'+esc(lastAccess(p.id))+'</td><td>'+(attendanceReady?attendanceCount(p.id):'—')+'</td><td>'+(ADMIN_EMAILS.includes(p.email)?'<span class="admin-protected">Administrador · protegido</span>':'<button class="danger-button" data-delete-user="'+esc(p.id)+'">Eliminar cuenta</button>')+'</td></tr>').join('')+'</tbody></table></div>':'<p>No hay perfiles registrados.</p>';
   $('#delete-all-users').disabled=busy||!users.some(p=>!ADMIN_EMAILS.includes(p.email)&&p.id!==user.uid);
 }
 function rebuildWeekControls(){
@@ -108,7 +111,7 @@ function resetData(){
   for(const selector of ['#total-stat','#portions-stat','#blocked-stat'])$(selector).textContent='—';
   $('#profile-form').reset();$('#profile-message').textContent='';$('#save-message').textContent='';
 
-  unsubs.forEach(fn=>fn());unsubs=[];selected.clear();dirty.clear();collapsedDays.clear();days={};reservations=[];modalities=[];users=[];profile=null;dataReady=false;reservationsReady=false;
+  unsubs.forEach(fn=>fn());unsubs=[];selected.clear();dirty.clear();collapsedDays.clear();days={};reservations=[];modalities=[];users=[];attendance=[];activity={};attendanceReady=false;activityReady=false;profile=null;dataReady=false;reservationsReady=false;
 }
 function subscribeData(){
   const session=epoch;
@@ -129,6 +132,10 @@ function subscribeData(){
   unsubs.push(onSnapshot(q,guard(s=>{reservations=s.docs.map(d=>({id:d.id,...d.data()}));reservationsReady=true;hydrate();renderDays();renderAdmin();}),e=>error(e)));
   unsubs.push(onSnapshot(collection(db,'modalities'),guard(s=>{modalities=s.docs.map(d=>({id:d.id,...d.data()}));if(!document.activeElement?.closest('#day-list'))renderDays();renderAdmin();}),e=>error(e)));
   if(isAdmin)unsubs.push(onSnapshot(collection(db,'users'),guard(s=>{users=s.docs.map(d=>({id:d.id,...d.data()}));renderAdmin();}),e=>error(e)));
+  if(isAdmin){
+    unsubs.push(onSnapshot(collection(db,'attendance'),guard(s=>{attendance=s.docs.map(d=>({id:d.id,...d.data()}));attendanceReady=true;renderAdmin();}),e=>error(e)));
+    unsubs.push(onSnapshot(collection(db,'userActivity'),guard(s=>{activity=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));activityReady=true;renderAdmin();}),e=>error(e)));
+  }
 }
 $('#login-button').addEventListener('click',async()=>{
   $('#login-button').disabled=true;
@@ -145,7 +152,7 @@ onAuthStateChanged(auth,u=>{
   $('#admin-view').hidden=true;$('#student-view').hidden=false;
   document.querySelectorAll('.nav-button').forEach(b=>{const active=b.dataset.view==='student';b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
   $('#app-status').textContent=u?'Sesión iniciada. Cargando datos…':'Iniciá sesión para reservar.';
-  if(u)subscribeData();renderDays();
+  if(u){subscribeData();if(u.emailVerified)setDoc(doc(db,'userActivity',u.uid),{lastSeen:serverTimestamp()}).catch(()=>console.warn('No se pudo registrar el acceso. Revisá las reglas de Firestore.'));}renderDays();
 });
 $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
   if(!user)throw new Error('Iniciá sesión.');
@@ -200,6 +207,11 @@ $('#block-controls').addEventListener('click',e=>{const key=e.target.dataset.blo
   await runTransaction(db,async tx=>{const ref=doc(db,'days',key),s=await tx.get(ref),d=s.data();if(d.blocked!==day.blocked)throw new Error('El estado cambió. Revisá el día y volvé a intentar.');tx.update(ref,{blocked:!d.blocked,generation:d.generation+(d.blocked?0:1),reason:reason.slice(0,160),updatedBy:user.uid,updatedAt:serverTimestamp()});});
   $('#app-status').textContent=day.blocked?'Día desbloqueado. Las reservas canceladas no se restauran.':'Día bloqueado y reservas canceladas.';
 });});
+$('#admin-results').addEventListener('change',e=>{const uid=e.target.dataset.attendance;if(!uid||!isAdmin||!attendanceReady||busy){renderAdmin();return;}const present=e.target.checked,dateKey=adminDate;action(async()=>{
+  if(dateKey>argentinaToday())throw new Error('No se puede marcar asistencia para un día futuro.');
+  await setDoc(doc(db,'attendance',uid+'_'+dateKey),{uid,dateKey,present,updatedBy:user.uid,updatedAt:serverTimestamp()});
+  $('#app-status').textContent=present?'Asistencia registrada: suma un día aunque venga a ambos turnos.':'Se quitó la asistencia de este día.';
+});});
 $('#admin-results').addEventListener('click',e=>{const id=e.target.dataset.cancel;if(!id||!isAdmin)return;action(async()=>{if(!confirm('¿Dar de baja esta reserva solicitada por WhatsApp?'))return;await setDoc(doc(db,'reservations',id),{cancelled:true,updatedAt:serverTimestamp()},{merge:true});});});
 $('#condition-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
   const name=$('#new-condition').value.trim(),chosen=[...document.querySelectorAll('[name="modality-day"]:checked')].map(e=>e.value);
@@ -214,8 +226,11 @@ async function removeComedorAccount(uid){
   const lock=doc(db,'accountDeletionLocks',uid);
   if(!(await getDoc(lock)).exists())await setDoc(lock,{createdAt:serverTimestamp()});
   try{
-    const snapshot=await getDocs(query(collection(db,'reservations'),where('uid','==',uid)));
-    for(let i=0;i<snapshot.docs.length;i+=450){const batch=writeBatch(db);for(const item of snapshot.docs.slice(i,i+450))batch.delete(doc(db,'reservations',item.id));await batch.commit();}
+    for(const name of ['reservations','attendance']){
+      const snapshot=await getDocs(query(collection(db,name),where('uid','==',uid)));
+      for(let i=0;i<snapshot.docs.length;i+=450){const batch=writeBatch(db);for(const item of snapshot.docs.slice(i,i+450))batch.delete(doc(db,name,item.id));await batch.commit();}
+    }
+    await deleteDoc(doc(db,'userActivity',uid));
     await deleteDoc(doc(db,'users',uid));
   }finally{await deleteDoc(lock);}
 }
