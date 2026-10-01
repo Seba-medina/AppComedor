@@ -26,8 +26,8 @@
 
   <main id="inicio"><div class="profile-toolbar"><span>Esta semana</span><div class="profile-actions"><button id="tutorial-button" type="button">Tutorial</button><button id="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-panel">Mi perfil</button></div></div>          <section id="profile-panel" class="card settings-card profile-panel" hidden aria-labelledby="profile-title"><h2 id="profile-title">Mi perfil</h2><p id="profile-intro">Iniciá sesión para completar tus datos.</p><form id="profile-form" hidden><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><button class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p></form></section>
     <section id="student-view" class="view" aria-labelledby="student-title">
-      <div class="page-heading"><div><p id="week-caption" class="eyebrow"></p><h1 id="student-title">Armá tu semana<span class="spark">✳</span></h1><p>Elegí los días que venís y completá los detalles de cada comida.</p></div><div class="deadline">◷ &nbsp; Podés reservar hasta las 10:00 de cada día</div></div>
-      <div class="student-layout">
+      <div class="page-heading"><div><p id="week-caption" class="eyebrow"></p><h1 id="student-title">Armá tu semana<span class="spark">✳</span></h1><p>Consultá el menú, marcá los días y elegí cuándo retirás tu comida.</p></div><div class="deadline">◷ &nbsp; Podés reservar hasta las 10:00 de cada día</div></div>
+      <section id="first-use" class="first-use" aria-labelledby="first-use-title"><div><p class="eyebrow">TU PRIMERA RESERVA</p><h2 id="first-use-title">Empezá en tres pasos</h2><ol class="first-use-steps"><li data-setup="login">1. Ingresar</li><li data-setup="profile">2. Guardar perfil</li><li data-setup="reserve">3. Elegir y confirmar</li></ol><p id="first-use-message"></p></div><button id="first-use-action" type="button" class="primary-button">Ingresar con Google</button></section><div id="pending-reservation" class="pending-reservation" hidden role="status">Tenés cambios sin guardar. Revisá los horarios y tocá el botón de guardar.</div><div class="student-layout">
         <section class="card reservation-card" aria-labelledby="days-title">
           <div class="section-head"><div><h2 id="days-title">Tu reserva semanal</h2><p>Máximo 2 porciones por día: 2 en un turno o 1 en cada uno. Podés editar tu reserva.</p></div><span id="selected-count" class="count-pill">0 días elegidos</span></div>
           <div id="day-list" class="day-list"></div>
@@ -39,7 +39,7 @@
         <aside class="sidebar">
 
           <section class="menu-card" aria-labelledby="menu-title"><div class="menu-card-head"><div><p class="eyebrow">EN EL COMEDOR</p><h2 id="menu-title">Menú de la semana</h2></div><span>✳</span></div><img hidden alt="Menú semanal publicado por el comedor"><p id="menu-note">Cargando menú…</p></section>
-          <section class="help-card"><span class="help-star">✦</span><h3>¿Necesitás dar de baja un día?</h3><p>Por ahora, avisá por WhatsApp al privado del comedor.</p></section>
+          <section class="help-card"><span class="help-star">✦</span><h3>¿Necesitás cancelar tu reserva?</h3><p>Por ahora, avisá por WhatsApp al privado del comedor.</p></section>
         </aside>
       </div>
     </section>

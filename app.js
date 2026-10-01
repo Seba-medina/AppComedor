@@ -30,22 +30,42 @@ function hydrate(){
     else selected.delete(date);
   }
 }
+function renderFirstUse(){
+  const confirmed=current().some(r=>r.uid===user?.uid&&isActive(r));
+  $('#first-use').hidden=confirmed;
+  const loading=!!user&&(!dataReady||!reservationsReady);
+  const stage=!user?'login':!profile?'profile':'reserve';
+  document.querySelectorAll('[data-setup]').forEach(el=>{const done=el.dataset.setup==='login'?!!user:el.dataset.setup==='profile'?!!profile:confirmed;el.classList.toggle('done',done);el.classList.toggle('current',el.dataset.setup===stage);});
+  $('#first-use-title').textContent=!user?'Reservá tu comida en tres pasos':!profile?'Completá tu perfil una sola vez':'Ya podés elegir tus días';
+  $('#first-use-message').textContent=loading?'Estamos cargando tus datos…':!user?'Ingresá con tu cuenta de Google para empezar.':!profile?'Guardá tu nombre, condición y preferencias. Después se completan automáticamente.':'Marcá un día, elegí al menos un horario y guardá. Podés repetirlo para varios días.';
+  const button=$('#first-use-action');button.disabled=loading;button.textContent=loading?'Cargando…':!user?'Ingresar con Google':!profile?'Completar mi perfil':'Elegir días';
+  $('#pending-reservation').hidden=!dirty.size;
+}
+$('#first-use-action').addEventListener('click',()=>{
+  if(!user){$('#login-button').click();return;}
+  if(!profile){$('#profile-panel').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');$('#profile-panel').scrollIntoView({behavior:'smooth',block:'center'});$('#profile-name').focus({preventScroll:true});return;}
+  $('#day-list').scrollIntoView({behavior:'smooth',block:'start'});
+  $('#day-list input:not(:disabled)')?.focus({preventScroll:true});
+});
 function renderDays(){
+  renderFirstUse();
+
   const ready=user&&profile&&dataReady&&reservationsReady;
   if(user&&dataReady&&reservationsReady&&$('#app-status').textContent.includes('Cargando datos'))$('#app-status').textContent=profile?'Datos del comedor actualizados.':'Completá y guardá tu perfil para reservar.';
   $('#save-button').disabled=!ready||busy;
   $('#save-button').textContent=current().some(r=>r.uid===user?.uid&&isActive(r))?'Guardar cambios de mi reserva':'Guardar reserva semanal';
   $('#day-list').innerHTML=dates().map(date=>{
     const day=days[date],closed=Date.now()>=deadline(date),disabled=!ready||!day||day.blocked||closed,picked=selected.get(date);
-    const explanation=!user?'Iniciá sesión':!dataReady?'Cargando':!day?'Semana sin habilitar':day.blocked?'Día bloqueado':closed?'Plazo cerrado':!profile?'Completá tu perfil':'';
+    const total=picked?Object.values(picked).reduce((n,r)=>n+r.portions,0):0;
+    const explanation=!user?'Iniciá sesión':!dataReady?'Cargando':!day?'Semana sin habilitar':day.blocked?'Día bloqueado':closed?'Plazo cerrado':!profile?'Completá tu perfil':picked?(total>2?'Supera el máximo: reducí a 2 porciones':total?total+' / 2 porciones':'Elegí un horario'):'Tocá para elegir';
     const options=modalities.filter(c=>c.active&&c.dates.includes(date));
-    return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span></div>'+(picked?'<p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
+    return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span></div>'+(picked?'<p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
       const r=picked[shift];
       return '<div class="turn-card"><label><input type="checkbox" data-date="'+date+'" data-shift="'+shift+'" '+(r?'checked ':'')+(disabled?'disabled':'')+'> '+shiftLabel(shift)+'</label>'+(r?'<div class="day-details"><div class="field"><label>Porciones<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="portions" '+(disabled?'disabled':'')+'>'+[1,2].map(n=>'<option '+(r.portions===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label></div><div class="field"><label>Restricciones<input maxlength="100" data-date="'+date+'" data-shift-field="'+shift+'" data-field="diet" value="'+esc(r.diet)+'" '+(disabled?'disabled':'')+'></label></div><div class="field"><label>Modalidad especial<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="modalityId" '+(disabled?'disabled':'')+'><option value="">Condición habitual</option>'+options.map(c=>'<option value="'+esc(c.id)+'" '+(r.modalityId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label></div></div>':'')+'</div>';
     }).join(''):'')+'</div>';
   }).join('');
   $('#selected-count').textContent=selected.size+' días elegidos';
-  const mine=current().filter(r=>r.uid===user?.uid);
+  const mine=current().filter(r=>r.uid===user?.uid&&r.portions>0);
   $('#my-history').innerHTML=mine.length?'<h3>Mis reservas</h3>'+mine.map(r=>'<p>'+esc(label(r.dateKey))+' · '+shiftLabel(r.shift)+' · '+r.portions+' porciones · <strong>'+esc(reservationStatus(r,days[r.dateKey]))+'</strong></p>').join(''):'';
 }
 function renderAdmin(){
@@ -135,10 +155,10 @@ $('#day-list').addEventListener('change',e=>{
   const existing=shift=>current().some(r=>r.uid===user.uid&&r.dateKey===key&&(!shift||r.shift===shift)&&isActive(r));
   if(t.dataset.day){if(t.checked)selected.set(key,{});else if(existing()){t.checked=true;$('#save-message').textContent='Para dar de baja una reserva, avisá por WhatsApp.';return;}else selected.delete(key);}
   else if(t.dataset.shift){const shift=t.dataset.shift;if(t.checked)selected.get(key)[shift]={portions:1,diet:profile.diet,modalityId:''};else delete selected.get(key)[shift];}
-  else if(t.dataset.field){selected.get(key)[t.dataset.shiftField][t.dataset.field]=t.dataset.field==='portions'?Number(t.value):t.value;dirty.add(key);return;}
+  else if(t.dataset.field){selected.get(key)[t.dataset.shiftField][t.dataset.field]=t.dataset.field==='portions'?Number(t.value):t.value;dirty.add(key);renderDays();return;}
   dirty.add(key);renderDays();
 });
-$('#day-list').addEventListener('input',e=>{const t=e.target;if(t.dataset.field==='diet'){selected.get(t.dataset.date)[t.dataset.shiftField].diet=t.value;dirty.add(t.dataset.date);}});
+$('#day-list').addEventListener('input',e=>{const t=e.target;if(t.dataset.field==='diet'){selected.get(t.dataset.date)[t.dataset.shiftField].diet=t.value;dirty.add(t.dataset.date);renderFirstUse();}});
 $('#save-button').addEventListener('click',()=>action(async()=>{
   const entries=validateSelections(selected,days,profile),batch=writeBatch(db);
   for(const [dateKey,turns]of entries)for(const shift of SHIFTS){
@@ -148,7 +168,7 @@ $('#save-button').addEventListener('click',()=>action(async()=>{
     if(r.modalityId&&!modalities.some(c=>c.id===r.modalityId&&c.active&&c.dates.includes(dateKey)))throw new Error('Revisá las modalidades: una opción dejó de estar habilitada.');
     batch.set(doc(db,'reservations',id),{uid:user.uid,dateKey,week,shift,generation,portions:r.portions,diet:r.diet.trim(),modalityId:r.modalityId,name:profile.name,condition:profile.condition,cancelled:false,createdAt:old?.createdAt||serverTimestamp(),updatedAt:serverTimestamp()});
   }
-  await batch.commit();dirty.clear();$('#save-message').textContent='Reservas guardadas en el comedor.';$('#app-status').textContent='Reservas confirmadas.';
+  await batch.commit();dirty.clear();$('#save-message').textContent='✓ Tu reserva quedó confirmada. Revisá el detalle en Mis reservas.';$('#app-status').textContent='Reservas confirmadas.';
 }));
 $('#activate-week').addEventListener('click',()=>action(async()=>{
   const batch=writeBatch(db);
