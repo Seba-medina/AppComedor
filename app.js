@@ -2,7 +2,7 @@ import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {collection,doc,query,where,onSnapshot,getDoc,setDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import {ADMIN_EMAIL,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
+import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -108,7 +108,7 @@ $('#login-button').addEventListener('click',async()=>{
 });
 $('#logout-button').addEventListener('click',()=>action(()=>signOut(auth)));
 onAuthStateChanged(auth,u=>{
-  epoch++;resetData();user=u;isAdmin=!!u?.emailVerified&&u.email===ADMIN_EMAIL;
+  epoch++;resetData();user=u;isAdmin=!!u?.emailVerified&&ADMIN_EMAILS.includes(u.email);
   $('#login-button').hidden=!!u;$('#logout-button').hidden=!u;
   $('#admin-nav').hidden=!isAdmin;$('#profile-form').hidden=!u;
   if(!u){$('#profile-panel').hidden=true;$('#profile-toggle').setAttribute('aria-expanded','false');}

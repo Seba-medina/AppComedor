@@ -1,6 +1,7 @@
 export const SHIFTS = ['mediodia', 'noche'];
 export const shiftLabel = s => s === 'mediodia' ? 'Mediodía' : 'Noche';
 export const ADMIN_EMAIL = 'sebastianezequielmedina@gmail.com';
+export const ADMIN_EMAILS = [ADMIN_EMAIL, 'marchesemarialaura@gmail.com'];
 export const dateKey = d => d.toISOString().slice(0, 10);
 export function argentinaToday(now = new Date()) {
   const p = new Intl.DateTimeFormat('en-CA', {timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);

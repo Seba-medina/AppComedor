@@ -6,7 +6,7 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
     function admin() {
-      return signedIn() && request.auth.token.email == 'sebastianezequielmedina@gmail.com';
+      return signedIn() && request.auth.token.email in ['sebastianezequielmedina@gmail.com', 'marchesemarialaura@gmail.com'];
     }
     function shortText(x,n) { return x is string && x.size() <= n; }
     function dateStamp(key) {
