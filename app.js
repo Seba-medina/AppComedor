@@ -80,6 +80,10 @@ function watchMenu(){
   },e=>error(e));
 }
 function resetData(){
+  for(const selector of ['#users-list','#admin-results','#my-history','#condition-list','#block-controls','#admin-days'])$(selector).replaceChildren();
+  for(const selector of ['#total-stat','#portions-stat','#blocked-stat'])$(selector).textContent='—';
+  $('#profile-form').reset();$('#profile-message').textContent='';$('#save-message').textContent='';
+
   unsubs.forEach(fn=>fn());unsubs=[];selected.clear();dirty.clear();days={};reservations=[];modalities=[];users=[];profile=null;dataReady=false;reservationsReady=false;
 }
 function subscribeData(){

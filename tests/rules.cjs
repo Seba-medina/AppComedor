@@ -84,6 +84,17 @@ const assert=require('node:assert/strict');
   }
   await assertSucceeds(batch.commit());
   assert.equal((await getDocs(query(collection(weeklyUser,'reservations'),where('uid','==','weekly')))).size,10);
+  await assertSucceeds(getDoc(doc(guest,'menus',future)));
+  await assertFails(getDocs(collection(guest,'menus')));
+  await assertFails(getDocs(collection(student,'menus')));
+  const passwordAdmin=env.authenticatedContext('passwordadmin',{email:'sebastianezequielmedina@gmail.com',email_verified:true,firebase:{sign_in_provider:'password'}}).firestore();
+  await assertFails(getDocs(collection(passwordAdmin,'users')));
+  await assertFails(rawSetDoc(doc(student,'users','other'),profile));
+  await assertFails(setDoc(doc(student,'reservations',id(future,'mediodia',1)),{...slot(future,'mediodia',1),portions:-1}));
+  await assertFails(setDoc(doc(student,'reservations',id(future,'mediodia',1)),{...slot(future,'mediodia',1),portions:0.5}));
+  await assertFails(rawSetDoc(doc(student,'reservations',id(future,'mediodia',1)),{createdAt:serverTimestamp()},{merge:true}));
+  await assertSucceeds(rawSetDoc(doc(admin,'reservations',id(future,'mediodia',1)),{cancelled:true,updatedAt:serverTimestamp()},{merge:true}));
+  await assertFails(rawSetDoc(doc(student,'reservations',id(future,'mediodia',1)),{cancelled:false,updatedAt:serverTimestamp()},{merge:true}));
   console.log('OK: reglas compiladas; autenticación, permisos, perfiles, turnos, duplicados, hora, bloqueo, historial, modalidades y menú comprobados.');
  } finally { await env.cleanup(); }
 })().catch(e=>{console.error(e);process.exitCode=1});

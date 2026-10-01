@@ -10,7 +10,7 @@ No se importan las reservas ficticias ni el almacenamiento local de la demo.
 2. Authentication: habilitar Google y autorizar appomedoruner.vercel.app.
 3. Firestore → Reglas: reemplazar el contenido por el archivo firestore.rules y publicar.
 4. Abrir la web e iniciar sesión con sebastianezequielmedina@gmail.com.
-5. Guardar el perfil, abrir Panel del comedor, elegir el lunes y habilitar la semana.
+5. Guardar el perfil, abrir Panel del comedor, habilitar la semana actual.
 6. Cargar la imagen del menú y bloquear fechas sin servicio.
 7. Probar una cuenta de alumno: solo debe consultar su perfil y reservas.
 
@@ -18,9 +18,9 @@ Mientras no se publiquen las reglas, el login puede funcionar pero la base recha
 
 ## Roles y seguridad
 
-El administrador inicial se reconoce por email verificado y proveedor Google, tanto en la interfaz como en reglas. Cambiar el perfil no cambia permisos. Para agregar un administrador institucional hay que actualizar ADMIN_EMAIL en domain.mjs y admin() en firestore.rules; conviene migrar luego a roles por UID o custom claims.
+El administrador inicial se reconoce por email verificado y proveedor Google, tanto en la interfaz como en reglas. Cambiar el perfil no cambia permisos. Para agregar un administrador institucional hay que actualizar ADMIN_EMAILS en domain.mjs y admin() en firestore.rules; conviene migrar luego a roles por UID o custom claims.
 
-Los alumnos consultan sus reservas mediante una consulta por uid. La base rechaza lecturas de terceros, roles inventados en perfiles, reservas duplicadas, porciones fuera de 1–4, modalidades inexistentes/desactivadas, días bloqueados y reservas desde las 10:00 de Argentina. La validación usa request.time del servidor.
+Los alumnos consultan sus reservas mediante una consulta por uid. La base rechaza lecturas de terceros, roles inventados en perfiles, reservas duplicadas, más de 2 porciones por día entre ambos turnos, modalidades inexistentes/desactivadas, días bloqueados y reservas desde las 10:00 de Argentina. La validación usa request.time del servidor.
 
 ## Bloqueo y cancelaciones
 
@@ -50,3 +50,7 @@ Referencias oficiales:
 - https://firebase.google.com/docs/web/alt-setup
 - https://firebase.google.com/docs/firestore/security/rules-conditions
 - https://firebase.google.com/docs/firestore/security/test-rules-emulator
+
+## Revisión de seguridad
+
+Ver SECURITY.md para cambios, pruebas, límites conocidos y activación pendiente de App Check.

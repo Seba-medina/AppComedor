@@ -49,14 +49,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /modalities/{id} {
-      function dailyLimit(d) {
-        let otherShift = d.shift == 'mediodia' ? 'noche' : 'mediodia';
-        let otherId = d.uid+'_'+d.dateKey+'_'+otherShift+'_'+string(d.generation);
-        let other = getAfter(/databases/$(database)/documents/reservations/$(otherId)).data;
-        return other != null
-          && d.portions + (other.cancelled ? 0 : other.portions) <= 2
-          && d.portions + (other.cancelled ? 0 : other.portions) > 0;
-      }
       function valid(d) {
         return d.keys().hasAll(['name','dates','active','updatedAt'])
           && d.keys().hasOnly(['name','dates','active','updatedAt'])
@@ -69,7 +61,8 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /menus/{week} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if admin();
       allow create, update: if admin()
         && request.resource.data.keys().hasAll(['image','updatedAt'])
         && request.resource.data.keys().hasOnly(['image','updatedAt'])
@@ -99,7 +92,7 @@ service cloud.firestore {
           && !day.blocked && request.time < day.cutoff && d.week == day.week
           && d.portions is int && d.portions>=0 && d.portions<=2 && dailyLimit(d)
           && shortText(d.diet,100) && d.name==p.name && d.condition==p.condition
-          && d.modalityId is string
+          && shortText(d.modalityId,128)
           && (d.modalityId == '' || (
             get(/databases/$(database)/documents/modalities/$(d.modalityId)).data.active == true
             && d.dateKey in get(/databases/$(database)/documents/modalities/$(d.modalityId)).data.dates))
@@ -109,6 +102,7 @@ service cloud.firestore {
       allow create: if signedIn() && valid(request.resource.data) && request.resource.data.createdAt == request.time;
       allow update: if signedIn() && (
         (valid(request.resource.data) && !resource.data.cancelled
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['portions','diet','modalityId','name','condition','updatedAt'])
           && request.resource.data.createdAt == resource.data.createdAt)
         || (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelled','updatedAt'])
           && request.resource.data.cancelled == true && request.resource.data.updatedAt==request.time));
