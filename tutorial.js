@@ -9,10 +9,23 @@ document.body.append(dialog);
 let steps=[],index=0,target=null,profileWasHidden=true,wasAdmin=false,frame;
 function position(){
   if(!dialog.open||!target)return;
-  const r=target.getBoundingClientRect(),h=$('.tutorial-highlight');
-  h.style.left=Math.max(4,r.left-5)+'px';h.style.top=Math.max(4,r.top-5)+'px';
-  h.style.width=Math.min(innerWidth-8,r.width+10)+'px';h.style.height=Math.max(20,Math.min(r.bottom+5,$('.tutorial-card').getBoundingClientRect().top-14)-Math.max(4,r.top-5))+'px';
+  const r=target.getBoundingClientRect(),highlight=$('.tutorial-highlight'),card=$('.tutorial-card');
+  const margin=12,gap=18,cw=card.offsetWidth,ch=card.offsetHeight;
+  const clamp=(n,min,max)=>Math.max(min,Math.min(n,Math.max(min,max)));
+  const candidates=[
+    [r.left-cw-gap,r.top], [r.right+gap,r.top],
+    [r.left,r.bottom+gap], [r.left,r.top-ch-gap],
+    [margin,innerHeight-ch-margin], [innerWidth-cw-margin,margin]
+  ].map(([x,y])=>[clamp(x,margin,innerWidth-cw-margin),clamp(y,margin,innerHeight-ch-margin)]);
+  const overlap=([x,y])=>Math.max(0,Math.min(x+cw,r.right+gap)-Math.max(x,r.left-gap))*Math.max(0,Math.min(y+ch,r.bottom+gap)-Math.max(y,r.top-gap));
+  candidates.sort((a,b)=>overlap(a)-overlap(b));
+  card.style.left=candidates[0][0]+'px';card.style.top=candidates[0][1]+'px';card.style.bottom='auto';card.style.transform='none';
+  const left=Math.max(4,r.left-5),top=Math.max(4,r.top-5);
+  highlight.style.left=left+'px';highlight.style.top=top+'px';
+  highlight.style.width=Math.max(0,Math.min(innerWidth-4,r.right+5)-left)+'px';
+  highlight.style.height=Math.max(0,Math.min(innerHeight-4,r.bottom+5)-top)+'px';
 }
+
 function demo(kind){
   const box=$('#tutorial-demo');
   const examples={
