@@ -4,6 +4,8 @@ const deps=createRequire(process.env.APP_TEST_DEPS||path.resolve('tests/package.
 const {JSDOM}=deps('jsdom');
 (async()=>{
  const domain=await import('../domain.mjs');
+ const backupTools=await import('../backup.mjs');
+ let capturedBackup=null,failBackupRead=false;
  const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
  const document=dom.window.document,records=new Map(),listeners=[],writes=[];
  let authCallback;
@@ -16,12 +18,12 @@ const {JSDOM}=deps('jsdom');
  };
  const notify=()=>listeners.filter(x=>x.active).forEach(x=>x.cb(snapshot(x.ref)));
  const set=async(r,d,opts)=>{records.set(r.path,opts?.merge?{...records.get(r.path),...d}:d);writes.push(r.path);notify();};
- const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
+ const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,...backupTools,downloadBackup:b=>{capturedBackup=b;},validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
   auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
   signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onAuthStateChanged:(a,cb)=>{authCallback=cb;cb(null);},
   doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,w)=>({...r,field:w.field,value:w.value}),where:(field,op,value)=>({field,value}),
   onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
-  getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
+  getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),getDocsFromServer:async r=>{if(failBackupRead)throw new Error("Sin conexión");return snapshot(r);},setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
   writeBatch:()=>{const pending=[];return {set:(r,d)=>pending.push([r,d]),delete:r=>pending.push([r,null]),commit:async()=>{for(const [r,d]of pending){if(d===null){records.delete(r.path);notify();}else await set(r,d);}}};},
   runTransaction:async(db,fn)=>fn({get:async r=>snapshot(r),update:set}),
   serverTimestamp:()=>({server:true}),Timestamp:{fromDate:d=>d},setInterval(){},confirm:()=>true,prompt:()=>'',FileReader:dom.window.FileReader
@@ -42,6 +44,7 @@ const {JSDOM}=deps('jsdom');
  for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
  authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
  assert.equal(document.querySelector('#admin-nav').hidden,true);
+ document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));assert.equal(capturedBackup,null);
  assert.equal(document.querySelector('#profile-form').hidden,false);
  const check=selector=>{const e=document.querySelector(selector);assert.ok(e,selector);e.checked=true;e.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
  check('[data-day="'+week+'"]');
@@ -85,6 +88,13 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelector('#users-list img'),null);
  assert.equal(document.querySelector('#users-list script'),null);
  assert.match(document.querySelector('#users-list').textContent,/<img src=x/);
+ records.set('reservations/historical',{uid:'student',week:'2026-01-05',dateKey:'2026-01-05',shift:'mediodia',portions:1});
+ document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));
+ assert.equal(capturedBackup.projectId,'appcomedor-6b4f7');
+ assert.ok(capturedBackup.collections.reservations.some(r=>r.id==='historical'));
+ assert.equal(Object.keys(capturedBackup.collections).length,5);
+ capturedBackup=null;failBackupRead=true;document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));
+ assert.equal(capturedBackup,null);assert.match(document.querySelector('#backup-message').textContent,/No se pudo/);failBackupRead=false;
  records.set('users/admin',{name:'Admin',condition:'Personal',diet:'',email:domain.ADMIN_EMAIL});
  records.set('users/admin2',{name:'Laura',condition:'Personal',diet:'',email:'marchesemarialaura@gmail.com'});
  notify();

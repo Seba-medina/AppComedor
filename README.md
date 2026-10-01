@@ -56,3 +56,7 @@ Referencias oficiales:
 Ver SECURITY.md para cambios, pruebas, límites conocidos y activación pendiente de App Check.
 
 Los usuarios pueden cancelar cada turno desde Mis reservas antes de las 10:00 (Argentina). Se conserva el historial y se descuentan las porciones. Una cancelación no puede revertirse desde la cuenta del alumno. Publicar las reglas de Firestore actualizadas para habilitar esta operación.
+
+## Respaldo de datos
+
+El panel administrador permite descargar un respaldo JSON de todos los perfiles, días, modalidades, menús y reservas de todas las semanas. Lecturas directas del servidor; no se genera una copia parcial ante errores. Ver `BACKUPS.md` para guardar las copias y recuperar documentos faltantes con simulación previa. La recuperación requiere credenciales del responsable en su computadora; nunca en la página.

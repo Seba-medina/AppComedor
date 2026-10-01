@@ -1,7 +1,8 @@
+import {BACKUP_COLLECTIONS,buildBackup,downloadBackup} from './backup.mjs';
 import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import {collection,doc,query,where,onSnapshot,getDoc,getDocs,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {collection,doc,query,where,onSnapshot,getDoc,getDocs,getDocsFromServer,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
@@ -236,3 +237,15 @@ $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expan
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.
 setInterval(()=>{const nowWeek=monday();if(nowWeek!==week){week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
+
+$('#download-backup').addEventListener('click',()=>{if(!isAdmin||busy)return;action(async()=>{
+  const button=$('#download-backup'),message=$('#backup-message');button.disabled=true;message.textContent='Preparando copia de todas las semanas…';
+  try{
+    const snapshots=Object.fromEntries(await Promise.all(BACKUP_COLLECTIONS.map(async name=>[name,await getDocsFromServer(collection(db,name))])));
+    if(!isAdmin)throw new Error('La sesión administradora terminó. Volvé a ingresar.');
+    const backup=buildBackup(snapshots);downloadBackup(backup);
+    const count=BACKUP_COLLECTIONS.reduce((n,name)=>n+backup.collections[name].length,0);
+    message.textContent='Copia preparada: '+count+' registros. Guardá el archivo descargado en un lugar privado.';
+  }catch(err){message.textContent='No se pudo completar la copia. No se descargó un respaldo parcial.';throw err;}
+  finally{button.disabled=false;}
+});});
