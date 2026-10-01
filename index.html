@@ -6,14 +6,15 @@
   <meta name="theme-color" content="#073d29">
   <meta name="description" content="Reservas semanales del Comedor de la UNER.">
   <title>Reservas · El Comedor de la UNER</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23073d29'/%3E%3Cpath d='M13 36h38a19 19 0 0 1-38 0M10 31h44' fill='none' stroke='%23fff7e9' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='18' r='5' fill='%23ff7900'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/jpeg" href="assets/logo-comedor.jpg">
+  <link rel="apple-touch-icon" href="assets/logo-comedor.jpg">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
   <script type="module" src="tutorial.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#inicio" aria-label="El Comedor de la UNER, inicio"><span class="brand-icon">✳</span><span><strong>El Comedor</strong><small>DE LA UNER</small></span></a>
+    <a class="brand" href="#inicio" aria-label="El Comedor de la UNER, inicio"><img class="brand-logo" src="assets/logo-comedor.jpg" alt="" width="60" height="60"><span><strong>El Comedor</strong><small>DE LA UNER</small></span></a>
     <nav class="view-nav" aria-label="Navegación">
       <button class="nav-button active" data-view="student" aria-pressed="true">Mi reserva</button>
       <button id="admin-nav" hidden class="nav-button" data-view="admin" aria-pressed="false">Panel del comedor</button>
@@ -50,7 +51,7 @@
       <section class="card settings-card"><h2>Usuarios registrados</h2><div id="users-list"></div></section>
     </section>
   </main>
-  <footer>El Comedor de la UNER <span>✳</span> Reservas del Comedor de la UNER</footer>
+  <footer class="branded-footer"><img src="assets/logo-comedor.jpg" alt="" width="44" height="44" loading="lazy"><div><strong>El Comedor de la UNER</strong><small>Reservas y menú de la semana</small></div></footer>
 </body>
 </html>
 

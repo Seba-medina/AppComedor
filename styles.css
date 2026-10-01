@@ -25,3 +25,5 @@
 
 /* En el tutorial, la ampliación muestra el menú completo sin scroll interno. */
 .tutorial-menu-example.is-expanded{height:250px;max-height:250px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff4df}.tutorial-menu-example.is-expanded img{width:100%;height:100%;object-fit:contain;object-position:center}.tutorial-menu-example.is-expanded .tutorial-menu-placeholder{height:100%;width:100%}@media(max-height:650px){.tutorial-menu-example.is-expanded{height:180px;max-height:180px}}
+
+.brand-logo{display:block;width:60px;height:60px;object-fit:contain;flex-shrink:0;border-radius:50%;background:#fff}.branded-footer{display:flex;align-items:center;gap:12px}.branded-footer img{display:block;width:44px;height:44px;border-radius:50%;object-fit:contain}.branded-footer strong,.branded-footer small{display:block}.branded-footer strong{color:#41614b;font-size:13px}.branded-footer small{font-size:11px;margin-top:3px}@media(max-width:680px){.brand-logo{width:48px;height:48px}.brand strong{font-size:1.18rem}}
