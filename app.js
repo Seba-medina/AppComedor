@@ -1,7 +1,7 @@
 import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import {collection,doc,query,where,onSnapshot,getDoc,setDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {collection,doc,query,where,onSnapshot,getDoc,getDocs,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
@@ -20,7 +20,7 @@ function error(e,target='#app-status'){
 }
 async function action(fn){
   if(busy)return;busy=true;$('#save-button').disabled=true;
-  try{await fn();}catch(e){error(e);}finally{busy=false;renderDays();}
+  try{await fn();}catch(e){error(e);}finally{busy=false;renderDays();renderAdmin();}
 }
 function hydrate(){
   for(const date of dates()){
@@ -61,7 +61,7 @@ function renderDays(){
     const options=modalities.filter(c=>c.active&&c.dates.includes(date));
     return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span></div>'+(picked?'<p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
       const r=picked[shift];
-      return '<div class="turn-card"><label><input type="checkbox" data-date="'+date+'" data-shift="'+shift+'" '+(r?'checked ':'')+(disabled?'disabled':'')+'> '+shiftLabel(shift)+'</label>'+(r?'<div class="day-details"><div class="field"><label>Porciones<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="portions" '+(disabled?'disabled':'')+'>'+[1,2].map(n=>'<option '+(r.portions===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label></div><div class="field"><label>Restricciones<input maxlength="100" data-date="'+date+'" data-shift-field="'+shift+'" data-field="diet" value="'+esc(r.diet)+'" '+(disabled?'disabled':'')+'></label></div><div class="field"><label>Modalidad especial<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="modalityId" '+(disabled?'disabled':'')+'><option value="">Condición habitual</option>'+options.map(c=>'<option value="'+esc(c.id)+'" '+(r.modalityId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label></div></div>':'')+'</div>';
+      return '<div class="turn-card"><label><input type="checkbox" data-date="'+date+'" data-shift="'+shift+'" '+(r?'checked ':'')+(disabled?'disabled':'')+'> '+shiftLabel(shift)+'</label>'+(r?'<div class="day-details"><div class="field"><label>Porciones<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="portions" '+(disabled?'disabled':'')+'>'+[1,2].map(n=>'<option '+(r.portions===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label></div><div class="field"><label>Restricciones<input maxlength="100" data-date="'+date+'" data-shift-field="'+shift+'" data-field="diet" value="'+esc(r.diet)+'" '+(disabled?'disabled':'')+'></label></div><div class="field"><label>Modalidad especial<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="modalityId" '+(disabled?'disabled':'')+'>'+(r.modalityId&&!options.some(c=>c.id===r.modalityId)?'<option selected disabled>Modalidad no disponible: elegí otra</option>':'')+'<option value="">Condición habitual</option>'+options.map(c=>'<option value="'+esc(c.id)+'" '+(r.modalityId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label></div></div>':'')+'</div>';
     }).join(''):'')+'</div>';
   }).join('');
   $('#selected-count').textContent=selected.size+' días elegidos';
@@ -82,8 +82,9 @@ function renderAdmin(){
   }).join('');
   $('#admin-results').innerHTML+='<h3>Cancelaciones</h3>'+(current().filter(r=>r.dateKey===day&&!isActive(r)).map(r=>'<p>'+esc(r.name)+' · '+shiftLabel(r.shift)+' · '+esc(reservationStatus(r,days[r.dateKey]))+'</p>').join('')||'<p>Sin cancelaciones.</p>');
   $('#block-controls').innerHTML=dates().map(date=>'<div class="block-row"><span>'+esc(label(date))+'</span><button data-block="'+date+'" '+(!days[date]?'disabled':'')+'>'+(days[date]?.blocked?'Desbloquear':'Bloquear')+'</button></div>').join('');
-  $('#condition-list').innerHTML=modalities.filter(c=>c.dates.some(d=>dates().includes(d))).map(c=>'<li><span>'+esc(c.name)+'<small>'+c.dates.map(esc).join(', ')+'</small></span><button data-modality="'+esc(c.id)+'">'+(c.active?'Desactivar':'Activar')+'</button></li>').join('');
-  $('#users-list').innerHTML=users.map(p=>'<div class="person"><strong>'+esc(p.name)+'</strong><span>'+esc(p.email)+'</span><span>'+esc(p.condition)+' · '+esc(p.diet||'Sin preferencias')+'</span></div>').join('')||'<p>No hay perfiles registrados.</p>';
+  $('#condition-list').innerHTML=modalities.filter(c=>c.dates.some(d=>dates().includes(d))).map(c=>'<li><span>'+esc(c.name)+'<small>'+c.dates.map(esc).join(', ')+'</small></span><button data-modality="'+esc(c.id)+'">'+(c.active?'Desactivar':'Activar')+'</button><button class="danger-button" data-delete-modality="'+esc(c.id)+'">Eliminar</button></li>').join('');
+  $('#users-list').innerHTML=users.map(p=>'<div class="person"><strong>'+esc(p.name)+'</strong><span>'+esc(p.email)+'</span><span>'+esc(p.condition)+' · '+esc(p.diet||'Sin preferencias')+'</span>'+(ADMIN_EMAILS.includes(p.email)?'<span class="admin-protected">Administrador · protegido</span>':'<button class="danger-button" data-delete-user="'+esc(p.id)+'">Eliminar cuenta</button>')+'</div>').join('')||'<p>No hay perfiles registrados.</p>';
+  $('#delete-all-users').disabled=busy||!users.some(p=>!ADMIN_EMAILS.includes(p.email)&&p.id!==user.uid);
 }
 function rebuildWeekControls(){
   if(!dates().includes(adminDate))adminDate=dates()[0];
@@ -188,6 +189,21 @@ $('#condition-form').addEventListener('submit',e=>{e.preventDefault();action(asy
   if(!name||!chosen.length)throw new Error('Indicá nombre y al menos un día.');
   await setDoc(doc(collection(db,'modalities')),{name,dates:chosen,active:true,updatedAt:serverTimestamp()});e.target.reset();
 });});
+$('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.deleteModality;if(!id||!isAdmin)return;action(async()=>{const item=modalities.find(x=>x.id===id);if(!confirm('¿Eliminar la modalidad "'+item.name+'"? Ya no se podrá seleccionar. Las reservas existentes se conservan.'))return;await deleteDoc(doc(db,'modalities',id));$('#app-status').textContent='Modalidad eliminada.';});});
+async function removeComedorAccount(uid){
+  if(!isAdmin||uid===user.uid)throw new Error('No se puede eliminar una cuenta administradora.');
+  const p=await getDoc(doc(db,'users',uid));
+  if(p.exists()&&ADMIN_EMAILS.includes(p.data().email))throw new Error('Esta cuenta administradora está protegida.');
+  const lock=doc(db,'accountDeletionLocks',uid);
+  if(!(await getDoc(lock)).exists())await setDoc(lock,{createdAt:serverTimestamp()});
+  try{
+    const snapshot=await getDocs(query(collection(db,'reservations'),where('uid','==',uid)));
+    for(let i=0;i<snapshot.docs.length;i+=450){const batch=writeBatch(db);for(const item of snapshot.docs.slice(i,i+450))batch.delete(doc(db,'reservations',item.id));await batch.commit();}
+    await deleteDoc(doc(db,'users',uid));
+  }finally{await deleteDoc(lock);}
+}
+$('#users-list').addEventListener('click',e=>{const uid=e.target.dataset.deleteUser;if(!uid||!isAdmin||busy)return;action(async()=>{const p=users.find(x=>x.id===uid);if(!p||ADMIN_EMAILS.includes(p.email))return;if(!confirm('¿Eliminar el perfil y TODAS las reservas de '+p.name+'? Esta acción no se puede deshacer. Podrá volver a registrarse.'))return;await removeComedorAccount(uid);$('#user-delete-message').textContent='Perfil y reservas eliminados.';});});
+$('#delete-all-users').addEventListener('click',()=>{if(!isAdmin||busy)return;action(async()=>{const snapshot=await getDocs(collection(db,'users'));const targets=snapshot.docs.filter(p=>p.id!==user.uid&&!ADMIN_EMAILS.includes(p.data().email));if(!targets.length)return;if(!confirm('¿Eliminar '+targets.length+' perfiles y TODAS sus reservas? Los administradores se conservan. Esta acción no se puede deshacer.'))return;let done=0;try{for(const p of targets){$('#user-delete-message').textContent='Eliminando '+(done+1)+' de '+targets.length+'…';await removeComedorAccount(p.id);done++;}$('#user-delete-message').textContent=done+' perfiles eliminados. Se conservaron los administradores.';}catch(err){$('#user-delete-message').textContent='Se eliminaron '+done+' de '+targets.length+'. La operación se detuvo; podés volver a intentarlo.';throw err;}});});
 $('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.modality;if(!id||!isAdmin)return;action(async()=>{const c=modalities.find(x=>x.id===id);await setDoc(doc(db,'modalities',id),{name:c.name,dates:c.dates,active:!c.active,updatedAt:serverTimestamp()});});});
 $('#menu-upload').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;action(async()=>{
   if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>500000)throw new Error('Usá JPG, PNG o WebP de hasta 500 KB.');

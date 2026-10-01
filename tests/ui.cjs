@@ -21,8 +21,8 @@ const {JSDOM}=deps('jsdom');
   signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onAuthStateChanged:(a,cb)=>{authCallback=cb;cb(null);},
   doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,w)=>({...r,field:w.field,value:w.value}),where:(field,op,value)=>({field,value}),
   onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
-  getDoc:async r=>snapshot(r),setDoc:set,
-  writeBatch:()=>{const pending=[];return {set:(r,d)=>pending.push([r,d]),commit:async()=>{for(const [r,d]of pending)await set(r,d);}};},
+  getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
+  writeBatch:()=>{const pending=[];return {set:(r,d)=>pending.push([r,d]),delete:r=>pending.push([r,null]),commit:async()=>{for(const [r,d]of pending){if(d===null){records.delete(r.path);notify();}else await set(r,d);}}};},
   runTransaction:async(db,fn)=>fn({get:async r=>snapshot(r),update:set}),
   serverTimestamp:()=>({server:true}),Timestamp:{fromDate:d=>d},setInterval(){},confirm:()=>true,prompt:()=>'',FileReader:dom.window.FileReader
  });
@@ -73,5 +73,22 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelector('#users-list img'),null);
  assert.equal(document.querySelector('#users-list script'),null);
  assert.match(document.querySelector('#users-list').textContent,/<img src=x/);
+ records.set('users/admin',{name:'Admin',condition:'Personal',diet:'',email:domain.ADMIN_EMAIL});
+ records.set('users/admin2',{name:'Laura',condition:'Personal',diet:'',email:'marchesemarialaura@gmail.com'});
+ notify();
+ assert.equal(document.querySelector('[data-delete-user="admin"]'),null);
+ assert.equal(document.querySelector('[data-delete-user="admin2"]'),null);
+ document.querySelector('[data-delete-user="student"]').click();await new Promise(r=>setImmediate(r));
+ assert.equal(records.has('users/student'),false);
+ assert.equal([...records].some(([p,r])=>p.startsWith('reservations/')&&r.uid==='student'),false);
+ records.set('users/guest1',{name:'Uno',condition:'Alumno regular',diet:'',email:'uno@example.com'});
+ records.set('users/guest2',{name:'Dos',condition:'Alumno regular',diet:'',email:'dos@example.com'});notify();
+ document.querySelector('#delete-all-users').click();await new Promise(r=>setImmediate(r));
+ assert.equal(records.has('users/guest1'),false);assert.equal(records.has('users/guest2'),false);
+ assert.equal(records.has('users/admin'),true);assert.equal(records.has('users/admin2'),true);
+ records.set('modalities/curso',{name:'Curso',dates:[week],active:true});notify();
+ document.querySelector('[data-delete-modality="curso"]').click();await new Promise(r=>setImmediate(r));
+ assert.equal(records.has('modalities/curso'),false);
+ console.log('OK: eliminación individual, masiva, protección de ambos administradores y modalidad.');
  console.log('OK: UI sin sesión, rol alumno/admin, preferencias, ambos turnos, guardado y cancelación actualizada con SDK simulado.');
 })().catch(e=>{console.error(e);process.exitCode=1});
