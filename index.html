@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23073d29'/%3E%3Cpath d='M13 36h38a19 19 0 0 1-38 0M10 31h44' fill='none' stroke='%23fff7e9' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='18' r='5' fill='%23ff7900'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
+  <script type="module" src="tutorial.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -22,7 +23,7 @@
 
   <div id="app-status" class="demo-strip" role="status" aria-live="polite">Conectando con el comedor…</div>
 
-  <main id="inicio"><div class="profile-toolbar"><span>Esta semana</span><button id="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-panel">Mi perfil</button></div>          <section id="profile-panel" class="card settings-card profile-panel" hidden aria-labelledby="profile-title"><h2 id="profile-title">Mi perfil</h2><p id="profile-intro">Iniciá sesión para completar tus datos.</p><form id="profile-form" hidden><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><button class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p></form></section>
+  <main id="inicio"><div class="profile-toolbar"><span>Esta semana</span><div class="profile-actions"><button id="tutorial-button" type="button">Tutorial</button><button id="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-panel">Mi perfil</button></div></div>          <section id="profile-panel" class="card settings-card profile-panel" hidden aria-labelledby="profile-title"><h2 id="profile-title">Mi perfil</h2><p id="profile-intro">Iniciá sesión para completar tus datos.</p><form id="profile-form" hidden><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><button class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p></form></section>
     <section id="student-view" class="view" aria-labelledby="student-title">
       <div class="page-heading"><div><p id="week-caption" class="eyebrow"></p><h1 id="student-title">Armá tu semana<span class="spark">✳</span></h1><p>Elegí los días que venís y completá los detalles de cada comida.</p></div><div class="deadline">◷ &nbsp; Podés reservar hasta las 10:00 de cada día</div></div>
       <div class="student-layout">
