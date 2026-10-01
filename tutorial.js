@@ -67,13 +67,14 @@ function demo(kind){
 }
 
 function renderReservationDemo(screen,kind,stage){
-  const picked=kind==='portions'?stage>0:stage>0;
+  const picked=stage>0;
+  const expanded=kind==='portions'?picked:stage===2;
   const midday=kind==='portions'?([0,1,1,2,0][stage]||0):0;
   const night=kind==='portions'?([0,0,1,0,2][stage]||0):0;
   const header=document.createElement('div');header.className='tutorial-mini-header';
   const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=picked;checkbox.disabled=true;
   const title=document.createElement('strong');title.textContent='Jueves · día de ejemplo';header.append(checkbox,title);screen.append(header);
-  if(picked){
+  if(expanded){
     const hint=document.createElement('p');hint.className='tutorial-mini-hint';hint.textContent='Elegí los horarios · Máximo 2 porciones por día';screen.append(hint);
     for(const [name,amount]of [['Mediodía',midday],['Noche',night]]){
       const row=document.createElement('div');row.className='tutorial-mini-turn';
@@ -92,7 +93,7 @@ function renderReservationDemo(screen,kind,stage){
       screen.append(row);
     }
   }
-  const total=document.createElement('div');total.className='demo-scene-total';total.textContent=kind==='days'?(picked?'Día marcado: ahora elegí al menos un horario':'Primero marcá el día'):'Total del día: '+(midday+night)+' porciones';screen.append(total);
+  const total=document.createElement('div');total.className='demo-scene-total';total.textContent=kind==='days'?(expanded?'Horarios desplegados: elegí mediodía, noche o ambos':picked?'Día marcado: se abren sus horarios':'Primero marcá el día'):'Total del día: '+(midday+night)+' porciones';screen.append(total);
 }
 function renderMenuDemo(screen,stage){
   const heading=document.createElement('strong');heading.className='demo-scene-title';heading.textContent=stage===1?'Imagen ampliada':'Tocá la imagen del menú';screen.append(heading);
@@ -101,7 +102,7 @@ function renderMenuDemo(screen,stage){
   if(published&&!published.hidden&&published.getAttribute('src')){const img=document.createElement('img');img.src=published.getAttribute('src');img.alt='';frame.append(img);}
   else{const placeholder=document.createElement('div');placeholder.className='tutorial-menu-placeholder';placeholder.textContent='MENÚ DE LA SEMANA';frame.append(placeholder);}
   const action=document.createElement('span');action.className='tutorial-menu-action';action.textContent=stage===1?'− Reducir':'+ Ampliar';frame.append(action);screen.append(frame);
-  const caption=document.createElement('p');caption.className='tutorial-mini-hint';caption.textContent=stage===1?'Tocá otra vez para volver a la vista normal.':'La imagen se amplía al tocarla.';screen.append(caption);
+  const caption=document.createElement('p');caption.className='tutorial-mini-hint';caption.textContent=stage===1?'La imagen completa se muestra sin recortes. Tocá otra vez para reducirla.':'La imagen se amplía al tocarla.';screen.append(caption);
 }
 
 function show(){
