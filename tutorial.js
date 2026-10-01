@@ -6,7 +6,7 @@ dialog.setAttribute('aria-labelledby','tutorial-title');
 dialog.setAttribute('aria-describedby','tutorial-description');
 dialog.innerHTML='<div class="tutorial-highlight" aria-hidden="true"></div><section class="tutorial-card"><div class="tutorial-top"><span id="tutorial-progress"></span><button type="button" id="tutorial-exit">Salir</button></div><div aria-live="polite" aria-atomic="true"><h2 id="tutorial-title"></h2><p id="tutorial-description"></p></div><div id="tutorial-demo"></div><div class="tutorial-controls"><button type="button" id="tutorial-back">Atrás</button><button type="button" id="tutorial-next">Siguiente</button></div></section>';
 document.body.append(dialog);
-let steps=[],index=0,target=null,profileWasHidden=true,wasAdmin=false,frame;
+let steps=[],index=0,target=null,profileWasHidden=true,wasAdmin=false,frame,demoTimer;
 function position(){
   if(!dialog.open||!target)return;
   const r=target.getBoundingClientRect(),highlight=$('.tutorial-highlight'),card=$('.tutorial-card');
@@ -27,17 +27,40 @@ function position(){
 }
 
 function demo(kind){
+  clearInterval(demoTimer);
   const box=$('#tutorial-demo');
   const examples={
-    portions:'<div class="portion-animation"><div class="portion-frame frame-one"><div>✓ Mediodía <b>1 porción</b></div><div>✓ Noche <b>1 porción</b></div></div><div class="portion-frame frame-two"><div>✓ Mediodía <b>2 porciones</b></div><div>Noche <b>Sin retiro</b></div></div><div class="portion-frame frame-three"><div>Mediodía <b>Sin retiro</b></div><div>✓ Noche <b>2 porciones</b></div></div></div><div class="demo-result">Total del día: 2 porciones</div>',
-    days:'<div class="demo-choice first">Lunes</div><div class="demo-choice second">Martes</div><div class="demo-result">Elegí los días que necesitás</div>',
-    profile:'<div class="demo-choice first">Nombre y condición</div><div class="demo-choice second">Preferencias alimentarias</div><div class="demo-result">Guardar perfil</div>',
-    save:'<div class="demo-choice first">Revisar los datos</div><div class="demo-choice second">Guardar</div><div class="demo-result">Confirmación de la operación</div>',
-    block:'<div class="demo-choice first">Elegir el día</div><div class="demo-choice second">Bloquear y confirmar</div><div class="demo-result">Reservas del día canceladas</div>',
-    pdf:'<div class="demo-choice first">Elegir el día</div><div class="demo-choice second">Descargar PDF del día</div><div class="demo-result">Planilla con total de porciones</div>'
+    portions:[['Elegir el día','✓ Jueves','Mediodía: sin elegir','Noche: sin elegir','0 porciones'],['Seleccionar mediodía','✓ Jueves','✓ Mediodía: 1 porción','Noche: sin elegir','Total: 1 porción'],['Agregar noche','✓ Jueves','✓ Mediodía: 1 porción','✓ Noche: 1 porción','Total: 2 porciones'],['Otra opción: todo al mediodía','✓ Jueves','✓ Mediodía: 2 porciones','Noche: sin retiro','Total: 2 porciones'],['O todo a la noche','✓ Jueves','Mediodía: sin retiro','✓ Noche: 2 porciones','Total: 2 porciones']],
+    days:[['Elegir una fecha','Lunes','Martes','Miércoles','Seleccioná un día'],['Marcar martes','Lunes','✓ Martes','Miércoles','Martes seleccionado'],['Consultar sus horarios','Martes seleccionado','Mediodía','Noche','Los detalles aparecen debajo']],
+    profile:[['Abrir Mi perfil','Mi perfil','Nombre: sin completar','Preferencias: sin completar','Abrir formulario'],['Completar los datos','Nombre: Ana Pérez','Condición: Alumno regular','Preferencias: Sin TACC','Datos de ejemplo'],['Guardar el perfil','Ana Pérez','Alumno regular · Sin TACC','Guardar perfil','✓ Perfil guardado']],
+    save:[['Revisar antes de guardar','Jueves','Mediodía: 1 · Noche: 1','Total: 2 porciones','Datos listos'],['Guardar la reserva','Guardar reserva semanal','Procesando…','Esperá la confirmación','Guardando'],['Comprobar el resultado','✓ Reservas confirmadas','Mis reservas','Jueves · Mediodía y noche','✓ Reserva guardada']],
+    activate:[['Abrir el panel','Esta semana','Días sin habilitar','Habilitar esta semana','Preparar la semana'],['Habilitar los días','Habilitar esta semana','Procesando…','Se conservan los bloqueos','Guardando'],['Ver la confirmación','✓ Semana habilitada','Lunes a viernes disponibles','Publicá el menú','Lista para recibir reservas']],
+    menu:[['Seleccionar una imagen','Cargar menú semanal','Elegir archivo','JPG, PNG o WebP · hasta 500 KB','Seleccionar imagen'],['Cargar el menú','menu-semanal.jpg','Publicando…','Menú de esta semana','Esperar confirmación'],['Menú publicado','✓ Imagen publicada','Visible para los usuarios','Tocar imagen para ampliar','✓ Menú listo']],
+    modalities:[['Escribir la modalidad','Curso de cocina','Elegir fechas','Martes · Miércoles','Nombre del ejemplo'],['Marcar las fechas','Curso de cocina','✓ Martes · ✓ Miércoles','Agregar con +','Solo esas fechas'],['Modalidad disponible','✓ Curso de cocina activo','Martes y miércoles','Los usuarios pueden elegirla','Activar o desactivar desde la lista']],
+    block:[['Elegir el día sin servicio','Viernes','Bloquear','Mediodía y noche','Revisar la fecha'],['Leer y confirmar','Se cancelan las reservas del día','Motivo: sin servicio','Confirmar bloqueo','Acción sobre ambos turnos'],['Día bloqueado','✓ Viernes bloqueado','Reservas anteriores canceladas','Desbloquear no las restaura','No admite nuevas reservas']],
+    pdf:[['Seleccionar el día','✓ Miércoles','Mediodía: 12 porciones','Noche: 8 porciones','Total: 20 porciones'],['Descargar la planilla','Descargar PDF del día','Miércoles · ambos turnos','Generando archivo','Preparar PDF'],['Archivo descargado','✓ reservas-del-dia.pdf','Nombre | Turno | Porciones','Total a preparar: 20','✓ Listo para imprimir']],
+    login:[['Iniciar sesión','Ingresar con Google','Elegir una cuenta','Usá siempre la misma','Abrir acceso'],['Cuenta seleccionada','ana@ejemplo.com','Continuar con Google','Volver al comedor','Ejemplo de ingreso'],['Sesión iniciada','✓ Hola, Ana','Mi perfil','Completá tus datos','Ya podés preparar tu reserva']],
+    deadline:[['Antes del cierre','09:59 · Argentina','Crear o editar reserva','Guardar cambios','Dentro del plazo'],['Llega el cierre','10:00 · Argentina','Plazo cerrado para hoy','Mediodía y noche','Ya no admite cambios'],['Reservar otro día','Hoy: plazo cerrado','Mañana: día habilitado','Elegir otro día','Revisá siempre la fecha']],
+    cancel:[['Contactar al comedor','Avisar por WhatsApp','Indicar día y turno','Solicitar la baja','Contactá al privado del comedor'],['El comedor gestiona la baja','Buscar la reserva','Dar de baja','Confirmar','Gestión administrativa'],['Baja registrada','✓ Reserva cancelada','Ya no suma porciones','Consultar Mis reservas','Baja gestionada por el comedor']],
+    users:[['Abrir usuarios registrados','Usuarios registrados','Ana Pérez','Alumno regular','Consultar perfiles'],['Revisar preferencias','Ana Pérez','Preferencias: Sin TACC','Condición habitual','Datos del perfil']]
   };
-  box.innerHTML=kind?'<p class="demo-label">Ejemplo animado · no modifica datos</p><div class="demo-sequence">'+examples[kind]+'</div>':'';
+  if(!kind){box.innerHTML='';return;}
+  const scenes=examples[kind]||examples.days;let stage=0,paused=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches||false;
+  box.innerHTML='<div class="demo-label">Demostración · datos ficticios</div><div class="demo-screen" aria-hidden="true"></div><div class="demo-playback"><span class="demo-counter"></span><button type="button" class="demo-pause"></button><button type="button" class="demo-advance">Ver siguiente</button></div>';
+  const paint=()=>{
+    const s=scenes[stage],screen=box.querySelector('.demo-screen');screen.replaceChildren();
+    s.forEach((line,i)=>{const el=document.createElement(i===0?'strong':'div');el.className=i===0?'demo-scene-title':i===4?'demo-scene-total':'demo-scene-row';el.textContent=line;screen.append(el);});
+    box.querySelector('.demo-counter').textContent='Ejemplo '+(stage+1)+' / '+scenes.length;
+    box.querySelector('.demo-pause').textContent=paused?'Reproducir':'Pausar';
+    if(dialog.open)position();
+  };
+  const advance=()=>{stage=(stage+1)%scenes.length;paint();};
+  const schedule=()=>{clearInterval(demoTimer);if(!paused)demoTimer=setInterval(advance,2600);};
+  box.querySelector('.demo-pause').onclick=()=>{paused=!paused;paint();schedule();};
+  box.querySelector('.demo-advance').onclick=()=>{paused=true;clearInterval(demoTimer);advance();};
+  paint();schedule();
 }
+
 function show(){
   const step=steps[index];
   $('#profile-panel').hidden=step.selector!=='#profile-panel';
@@ -57,7 +80,7 @@ function finish(){
   dialog.close();
 }
 dialog.addEventListener('close',()=>{
-  target=null;cancelAnimationFrame(frame);
+  target=null;clearInterval(demoTimer);cancelAnimationFrame(frame);
   $('#profile-panel').hidden=profileWasHidden;
   $('#profile-toggle').setAttribute('aria-expanded',String(!profileWasHidden));
   if(wasAdmin&&!$('#admin-nav').hidden)$('#admin-nav').click();
@@ -78,16 +101,16 @@ trigger.addEventListener('click',()=>{
     {selector:'#save-button',title:'6. Guardá y comprobá',text:'Tocá Guardar reserva semanal y esperá la confirmación. Si ya reservaste, verás Guardar cambios de mi reserva: edita la reserva existente sin duplicarla. Tus reservas confirmadas aparecen en Mis reservas.'},
     {selector:'.help-card',title:'Si necesitás cancelar',text:'Avisá por WhatsApp al privado del comedor. Si el comedor bloquea un día, sus reservas quedan canceladas. Podés repetir este tutorial cuando quieras desde el botón Tutorial.'}
   );
-  steps.forEach(s=>{if(s.selector==='#profile-panel')s.demo='profile';if(s.selector==='#day-list')s.demo=s.title.includes('turnos')?'portions':'days';if(s.selector==='#save-button')s.demo='save';});
+  steps.forEach(s=>{if(s.selector==='#login-button')s.demo='login';if(s.selector==='.menu-card')s.demo='menu';if(s.selector==='.deadline')s.demo='deadline';if(s.selector==='.help-card')s.demo='cancel';if(s.selector==='#profile-panel')s.demo='profile';if(s.selector==='#day-list')s.demo=s.title.includes('turnos')?'portions':'days';if(s.selector==='#save-button')s.demo='save';});
   if(wasAdmin)steps=[
-    {selector:'#activate-week',title:'1. Habilitá esta semana',text:'Antes de recibir reservas, tocá Habilitar esta semana. Se crean los días disponibles y se conservan los bloqueos que ya existían.',demo:'save'},
-    {selector:'#menu-upload',title:'2. Publicá el menú',text:'Seleccioná una imagen JPG, PNG o WebP de hasta 500 KB. Esperá la confirmación de publicación. Los usuarios verán el menú de esta semana.',demo:'save'},
-    {selector:'#condition-form',title:'3. Configurá modalidades',text:'Escribí el nombre de la modalidad, elegí las fechas en que corresponde y tocá +. Por ejemplo, un curso que dura martes y miércoles. Podés activar o desactivar modalidades desde la lista.',demo:'days'},
+    {selector:'#activate-week',title:'1. Habilitá esta semana',text:'Antes de recibir reservas, tocá Habilitar esta semana. Se crean los días disponibles y se conservan los bloqueos que ya existían.',demo:'activate'},
+    {selector:'#menu-upload',title:'2. Publicá el menú',text:'Seleccioná una imagen JPG, PNG o WebP de hasta 500 KB. Esperá la confirmación de publicación. Los usuarios verán el menú de esta semana.',demo:'menu'},
+    {selector:'#condition-form',title:'3. Configurá modalidades',text:'Escribí el nombre de la modalidad, elegí las fechas en que corresponde y tocá +. Por ejemplo, un curso que dura martes y miércoles. Podés activar o desactivar modalidades desde la lista.',demo:'modalities'},
     {selector:'#admin-days',title:'4. Consultá un día',text:'Tocá lunes, martes, miércoles, jueves o viernes. Debajo aparecen sus reservas de mediodía y noche. Los datos se actualizan cuando los usuarios guardan cambios.',demo:'days'},
     {selector:'#admin-results',title:'5. Revisá porciones y bajas',text:'Cada persona puede pedir hasta 2 porciones por día. Revisá cantidades y restricciones de cada turno. Si alguien solicita una baja por WhatsApp, buscá su registro, tocá Dar de baja y confirmá.',demo:'portions'},
     {selector:'#download-day-pdf',title:'6. Descargá la planilla',text:'Descargar PDF del día incluye ambos turnos, subtotales y el total de porciones. Las cancelaciones no suman. Volvé a descargarlo si hubo cambios.',demo:'pdf'},
     {selector:'#block-controls',title:'7. Gestioná días sin servicio',text:'Bloquear un día cancela las reservas de ambos turnos e impide nuevas reservas. Desbloquear no restaura las anteriores. La persona deberá reservar nuevamente antes de las 10:00.',demo:'block'},
-    {selector:'#users-list',title:'8. Consultá los perfiles',text:'Acá podés ver los usuarios registrados y sus preferencias. Podés volver a iniciar este recorrido con Tutorial mientras estés en el panel del comedor.'}
+    {selector:'#users-list',title:'8. Consultá los perfiles',text:'Acá podés ver los usuarios registrados y sus preferencias. Podés volver a iniciar este recorrido con Tutorial mientras estés en el panel del comedor.',demo:'users'}
   ];
   index=0;dialog.showModal();show();$('#tutorial-next').focus();
 });
