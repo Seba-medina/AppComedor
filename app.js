@@ -9,7 +9,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
 let adminDate=week;
 let dataReady=false,reservationsReady=false,busy=false,epoch=0,unsubs=[],menuUnsub;
-const selected=new Map(),dirty=new Set();
+const selected=new Map(),dirty=new Set(),collapsedDays=new Set();
 const dates=()=>weekDays(week);
 const isActive=r=>reservationStatus(r,days[r.dateKey])==='Confirmada';
 const current=()=>reservations.filter(r=>r.week===week);
@@ -58,11 +58,13 @@ function renderDays(){
     const day=days[date],closed=Date.now()>=deadline(date),disabled=!ready||!day||day.blocked||closed,picked=selected.get(date);
     const total=picked?Object.values(picked).reduce((n,r)=>n+r.portions,0):0;
     const explanation=!user?'Iniciá sesión':!dataReady?'Cargando':!day?'Semana sin habilitar':day.blocked?'Día bloqueado':closed?'Plazo cerrado':!profile?'Completá tu perfil':picked?(total>2?'Supera el máximo: reducí a 2 porciones':total?total+' / 2 porciones':'Elegí un horario'):'Tocá para elegir';
+    const reserved=current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r));
+    const collapsed=reserved&&collapsedDays.has(date)&&!dirty.has(date);
     const options=modalities.filter(c=>c.active&&c.dates.includes(date));
-    return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span></div>'+(picked?'<p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
+    return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span>'+(reserved?'<button type="button" class="day-collapse" data-toggle-day="'+date+'" aria-expanded="'+!collapsed+'" aria-controls="details-'+date+'">'+(collapsed?'Ver detalles':'Minimizar')+'</button>':'')+'</div>'+(picked?'<div id="details-'+date+'" '+(collapsed?'hidden':'')+'><p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
       const r=picked[shift];
       return '<div class="turn-card"><label><input type="checkbox" data-date="'+date+'" data-shift="'+shift+'" '+(r?'checked ':'')+(disabled?'disabled':'')+'> '+shiftLabel(shift)+'</label>'+(r?'<div class="day-details"><div class="field"><label>Porciones<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="portions" '+(disabled?'disabled':'')+'>'+[1,2].map(n=>'<option '+(r.portions===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label></div><div class="field"><label>Restricciones<input maxlength="100" data-date="'+date+'" data-shift-field="'+shift+'" data-field="diet" value="'+esc(r.diet)+'" '+(disabled?'disabled':'')+'></label></div><div class="field"><label>Modalidad especial<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="modalityId" '+(disabled?'disabled':'')+'>'+(r.modalityId&&!options.some(c=>c.id===r.modalityId)?'<option selected disabled>Modalidad no disponible: elegí otra</option>':'')+'<option value="">Condición habitual</option>'+options.map(c=>'<option value="'+esc(c.id)+'" '+(r.modalityId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label></div></div>':'')+'</div>';
-    }).join(''):'')+'</div>';
+    }).join('')+'</div>':'')+'</div>';
   }).join('');
   $('#selected-count').textContent=selected.size+' días elegidos';
   const mine=current().filter(r=>r.uid===user?.uid&&r.portions>0);
@@ -105,7 +107,7 @@ function resetData(){
   for(const selector of ['#total-stat','#portions-stat','#blocked-stat'])$(selector).textContent='—';
   $('#profile-form').reset();$('#profile-message').textContent='';$('#save-message').textContent='';
 
-  unsubs.forEach(fn=>fn());unsubs=[];selected.clear();dirty.clear();days={};reservations=[];modalities=[];users=[];profile=null;dataReady=false;reservationsReady=false;
+  unsubs.forEach(fn=>fn());unsubs=[];selected.clear();dirty.clear();collapsedDays.clear();days={};reservations=[];modalities=[];users=[];profile=null;dataReady=false;reservationsReady=false;
 }
 function subscribeData(){
   const session=epoch;
@@ -150,6 +152,12 @@ $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async
   await setDoc(doc(db,'users',user.uid),{name,condition:$('#profile-condition').value,diet:$('#profile-diet').value.trim(),email:user.email,updatedAt:serverTimestamp()});
   $('#profile-message').textContent='Perfil guardado. Las nuevas selecciones usarán estas preferencias.';$('#app-status').textContent='Perfil actualizado.';
 });});
+$('#day-list').addEventListener('click',e=>{
+  const button=e.target.closest('[data-toggle-day]');if(!button)return;
+  const date=button.dataset.toggleDay;
+  if(collapsedDays.has(date))collapsedDays.delete(date);else collapsedDays.add(date);
+  renderDays();$('#day-list [data-toggle-day="'+date+'"]').focus();
+});
 $('#day-list').addEventListener('change',e=>{
   const t=e.target,key=t.dataset.day||t.dataset.date;
   if(!key||!profile||!days[key]||days[key].blocked||Date.now()>=deadline(key))return;
