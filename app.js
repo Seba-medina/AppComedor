@@ -67,7 +67,7 @@ function renderAdmin(){
 }
 function rebuildWeekControls(){
   if(!dates().includes(adminDate))adminDate=dates()[0];
-  $('#modality-days').innerHTML=dates().map(date=>'<label><input type="checkbox" name="modality-day" value="'+date+'"> '+esc(label(date))+'</label>').join('');
+  $('#modality-days').innerHTML=dates().map((date,i)=>'<label class="modality-date"><input type="checkbox" name="modality-day" value="'+date+'" aria-label="'+esc(label(date))+'"><span><strong>'+['Lun','Mar','Mié','Jue','Vie'][i]+'</strong><small>'+date.slice(8)+'/'+date.slice(5,7)+'</small></span></label>').join('');
   $('#week-caption').textContent='ESTA SEMANA · '+label(dates()[0])+' al '+label(dates()[4]);
   $('.week-badge').textContent=dates()[0]+' — '+dates()[4];
 }
