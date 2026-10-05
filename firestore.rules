@@ -151,8 +151,24 @@ service cloud.firestore {
     }
     match /reservationPreferences/{uid} {
       allow read: if signedIn() && (uid == request.auth.uid || admin());
+      function validDay(d) {
+        return d is map && d.keys().hasAll(['mediodia','noche'])
+          && d.keys().hasOnly(['mediodia','noche'])
+          && d.mediodia is int && d.noche is int && d.mediodia>=0 && d.noche>=0
+          && d.mediodia+d.noche>=1 && d.mediodia+d.noche<=2;
+      }
+      function validSchedule(s) {
+        return s is map && s.keys().size()>0 && s.keys().hasOnly(['0','1','2','3','4'])
+          && (!('0' in s) || validDay(s['0'])) && (!('1' in s) || validDay(s['1']))
+          && (!('2' in s) || validDay(s['2'])) && (!('3' in s) || validDay(s['3']))
+          && (!('4' in s) || validDay(s['4']));
+      }
       allow create, update: if signedIn() && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['days','mediodia','noche','updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (('schedule' in request.resource.data
+          && request.resource.data.keys().hasOnly(['schedule','updatedAt'])
+          && validSchedule(request.resource.data.schedule))
+          || (!('schedule' in request.resource.data) && (request.resource.data.keys().hasOnly(['days','mediodia','noche','updatedAt'])
         && request.resource.data.days is list && request.resource.data.days.size()>0
         && request.resource.data.days.size()<=5 && request.resource.data.days.hasOnly([0,1,2,3,4])
         && request.resource.data.days.toSet().size() == request.resource.data.days.size()
@@ -160,7 +176,7 @@ service cloud.firestore {
         && request.resource.data.mediodia>=0 && request.resource.data.noche>=0
         && request.resource.data.mediodia+request.resource.data.noche>=1
         && request.resource.data.mediodia+request.resource.data.noche<=2
-        && request.resource.data.updatedAt == request.time;
+)));
       allow delete: if admin() && removableAccount(uid);
     }
     match /auditLogs/{id} {

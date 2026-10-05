@@ -4,13 +4,13 @@
 
 La página incorpora semanas administrativas independientes, buscador, resumen mensual con descarga CSV para Excel, registro de acciones administrativas, privacidad y datos de asistencia. Los alumnos siguen viendo la semana actual. No se efectuaron reservas, cancelaciones ni eliminaciones de producción durante las pruebas.
 
-La función Mi semana habitual también está incluida: configurar días y porciones una vez; luego Usar mi semana y Guardar reserva semanal. No crea reservas sin el segundo clic.
+La función Mi semana habitual también está incluida: configurar turnos y porciones de cada día una vez; luego Usar mi semana y Guardar reserva semanal. No crea reservas sin el segundo clic.
 
 Hay tres pasos externos pendientes. GitHub/Vercel no publica las reglas de Firebase ni activa App Check o el respaldo nativo.
 
 ## 1. Reglas
 
-Copiar `firestore.rules` completo en Firebase → Firestore Database → Reglas → Publicar. Incluye `auditLogs`. Los cambios administrativos se guardan junto con su registro en una misma escritura atómica; con reglas anteriores, Firebase rechazará ambas cosas. También se puede ejecutar `firebase deploy --only firestore:rules --project appcomedor-6b4f7` desde una cuenta autorizada.
+Copiar `firestore.rules` completo en Firebase → Firestore Database → Reglas → Publicar. Incluye `auditLogs` y el nuevo campo `schedule` de `reservationPreferences`. Las configuraciones anteriores se leen y convierten sin perder sus días y porciones; para guardar la configuración por día hay que publicar estas reglas. Los cambios administrativos se guardan junto con su registro en una misma escritura atómica; con reglas anteriores, Firebase rechazará ambas cosas. También se puede ejecutar `firebase deploy --only firestore:rules --project appcomedor-6b4f7` desde una cuenta autorizada.
 
 ## 2. Respaldo automático diario
 

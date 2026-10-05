@@ -64,7 +64,7 @@ function renderDays(){
   const ready=user&&profile&&dataReady&&reservationsReady;
   $('#configure-template').disabled=!user||!profile||busy;
   $('#apply-template').disabled=!ready||!weekTemplate||busy;
-  $('#template-summary').textContent=weekTemplate?weekTemplate.days.map(i=>['Lun','Mar','Mié','Jue','Vie'][i]).join(', ')+' · Mediodía: '+weekTemplate.mediodia+' · Noche: '+weekTemplate.noche+' porciones':'Configurá tus días y porciones habituales para reservar más rápido.';
+  $('#template-summary').textContent=weekTemplate?Object.entries(weekTemplate.schedule).map(([i,d])=>['Lun','Mar','Mié','Jue','Vie'][i]+': '+[d.mediodia?d.mediodia+' al mediodía':'',d.noche?d.noche+' a la noche':''].filter(Boolean).join(' y ')).join(' · '):'Configurá tus días y porciones habituales para reservar más rápido.';
   if(user&&dataReady&&reservationsReady&&$('#app-status').textContent.includes('Cargando datos'))$('#app-status').textContent=profile?'Datos del comedor actualizados.':'Completá y guardá tu perfil para reservar.';
   $('#save-button').disabled=!ready||busy;
   $('#save-button').textContent=current().some(r=>r.uid===user?.uid&&isActive(r))?'Guardar cambios de mi reserva':'Guardar reserva semanal';
@@ -147,7 +147,7 @@ function resetData(){
 function subscribeData(){
   const session=epoch;
   const guard=fn=>snapshot=>{if(session===epoch)fn(snapshot);};
-  unsubs.push(onSnapshot(doc(db,'reservationPreferences',user.uid),guard(s=>{weekTemplate=s.exists()?s.data():null;renderDays();}),e=>error(e)));
+  unsubs.push(onSnapshot(doc(db,'reservationPreferences',user.uid),guard(s=>{try{weekTemplate=s.exists()?validateTemplate(s.data()):null;}catch(e){weekTemplate=null;error(e);}renderDays();}),e=>error(e)));
   unsubs.push(onSnapshot(doc(db,'users',user.uid),guard(s=>{
     profile=s.exists()?s.data():null;
     if(document.activeElement?.closest('#profile-form')===null){
@@ -327,7 +327,22 @@ $('#monthly-csv').addEventListener('click',()=>{if(!isAdmin||!monthResult)return
 
 $('#app-check-status').textContent=RECAPTCHA_ENTERPRISE_SITE_KEY?'App Check: clave del sitio configurada. La exigencia de validación se verifica en Firebase.':'App Check: falta registrar el sitio y configurar la clave pública para activarlo.';
 
-$('#configure-template').addEventListener('click',()=>{if(!user||!profile||busy)return;const config=weekTemplate||{days:[0,1,2,3,4],mediodia:2,noche:0};document.querySelectorAll('[name="template-day"]').forEach(e=>{e.checked=config.days.includes(Number(e.value));});$('#template-mediodia').value=config.mediodia;$('#template-noche').value=config.noche;$('#template-message').textContent='';$('#week-template-dialog').showModal();});
+const templateDayNames=['Lunes','Martes','Miércoles','Jueves','Viernes'];
+$('#configure-template').addEventListener('click',()=>{
+ if(!user||!profile||busy)return;
+ const config=weekTemplate||validateTemplate({days:[0,1,2,3,4],mediodia:2,noche:0});
+ $('#template-days').innerHTML=templateDayNames.map((name,i)=>{
+  const day=config.schedule[i];
+  return '<fieldset class="template-day-row"><legend><label><input type="checkbox" name="template-day" value="'+i+'" '+(day?'checked':'')+'> '+name+'</label></legend><div class="template-day-turns">'+SHIFTS.map(shift=>'<label>'+shiftLabel(shift)+'<select data-template-day="'+i+'" data-template-shift="'+shift+'" aria-label="'+name+' '+shiftLabel(shift)+'" '+(day?'':'disabled')+'>'+[0,1,2].map(n=>'<option value="'+n+'" '+(n===(day?.[shift]??(shift==='mediodia'?2:0))?'selected':'')+'>'+(!n?'No voy':n+' '+(n===1?'porción':'porciones'))+'</option>').join('')+'</select></label>').join('')+'</div></fieldset>';
+ }).join('');
+ $('#template-message').textContent='';$('#week-template-dialog').showModal();
+});
+$('#template-days').addEventListener('change',e=>{
+ if(e.target.name==='template-day')document.querySelectorAll('[data-template-day="'+e.target.value+'"]').forEach(select=>{select.disabled=!e.target.checked;});
+});
 $('#close-template').addEventListener('click',()=>$('#week-template-dialog').close());
-$('#week-template-form').addEventListener('submit',e=>{e.preventDefault();if(!user||busy)return;action(async()=>{try{const config=validateTemplate({days:[...document.querySelectorAll('[name="template-day"]:checked')].map(e=>Number(e.value)),mediodia:Number($('#template-mediodia').value),noche:Number($('#template-noche').value)});await setDoc(doc(db,'reservationPreferences',user.uid),{...config,updatedAt:serverTimestamp()});$('#week-template-dialog').close();$('#app-status').textContent='Configuración guardada. Tocá Usar mi semana y luego Guardar reserva semanal.';}catch(err){$('#template-message').textContent=err.message;throw err;}});});
+$('#week-template-form').addEventListener('submit',e=>{e.preventDefault();if(!user||busy)return;action(async()=>{try{
+ const schedule={};for(const day of document.querySelectorAll('[name="template-day"]:checked'))schedule[day.value]=Object.fromEntries(SHIFTS.map(shift=>[shift,Number(document.querySelector('[data-template-day="'+day.value+'"][data-template-shift="'+shift+'"]').value)]));
+ const config=validateTemplate({schedule});await setDoc(doc(db,'reservationPreferences',user.uid),{...config,updatedAt:serverTimestamp()});$('#week-template-dialog').close();$('#app-status').textContent='Configuración guardada. Tocá Usar mi semana y luego Guardar reserva semanal.';
+ }catch(err){$('#template-message').textContent=err.code==='permission-denied'?'No se pudo guardar. El responsable de la app debe publicar las reglas actualizadas de Firestore.':err.message;throw err;}});});
 $('#apply-template').addEventListener('click',()=>{if(!user||!profile||!weekTemplate||busy||!dataReady||!reservationsReady)return;try{const result=applyWeekTemplate(weekTemplate,dates(),days,reservations,user.uid,profile,selected);for(const date of result.applied){selected.set(date,result.selection.get(date));dirty.add(date);collapsedDays.delete(date);}renderDays();$('#save-message').textContent=(result.applied.length?'Se configuraron '+result.applied.length+' días. Revisá y tocá Guardar reserva semanal.':'No hay días disponibles para esta configuración.')+(result.skipped.length?' No se aplicó en: '+result.skipped.map(s=>label(s.date)+' ('+s.reason+')').join('; ')+'.':'');if(result.applied.length)$('#save-button').focus();}catch(err){error(err);}});
