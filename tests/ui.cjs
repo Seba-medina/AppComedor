@@ -5,27 +5,30 @@ const {JSDOM}=deps('jsdom');
 (async()=>{
  const domain=await import('../domain.mjs');
  const backupTools=await import('../backup.mjs');
+ const management=await import('../management.mjs');
+ const templateTools=await import('../week-template.mjs');
  let capturedBackup=null,failBackupRead=false;
  const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
+ dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const document=dom.window.document,records=new Map(),listeners=[],writes=[];
  let authCallback;
  const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate());
  const week=next.toISOString().slice(0,10);
- const ref=(...args)=>({path:args.filter(x=>typeof x==='string').join('/')});
+ let autoId=0;const ref=(...args)=>args.length===1&&args[0]?.path?{path:args[0].path+'/auto'+(++autoId)}:{path:args.filter(x=>typeof x==='string').join('/')};
  const snapshot=r=>{
-  if(r.filter){const list=[...records].filter(([p,d])=>p.startsWith(r.path+'/')&&(!r.field||d[r.field]===r.value));return {docs:list.map(([p,d])=>({id:p.split('/').at(-1),data:()=>d}))};}
+  if(r.filter){const list=[...records].filter(([p,d])=>p.startsWith(r.path+'/')&&(!r.constraints||r.constraints.every(w=>!w.field||(w.op==='=='?d[w.field]===w.value:w.op==='>='?d[w.field]>=w.value:d[w.field]<w.value))));return {docs:list.map(([p,d])=>({id:p.split('/').at(-1),data:()=>d}))};}
   const data=records.get(r.path);return {exists:()=>!!data,data:()=>data};
  };
  const notify=()=>listeners.filter(x=>x.active).forEach(x=>x.cb(snapshot(x.ref)));
  const set=async(r,d,opts)=>{records.set(r.path,opts?.merge?{...records.get(r.path),...d}:d);writes.push(r.path);notify();};
- const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,...backupTools,downloadBackup:b=>{capturedBackup=b;},validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
+ const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,...backupTools,...management,...templateTools,applyWeekTemplate:(...args)=>templateTools.applyWeekTemplate(...args,new Date(week+'T09:00:00-03:00')),RECAPTCHA_ENTERPRISE_SITE_KEY:"",downloadBackup:b=>{capturedBackup=b;},validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
   auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
   signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onAuthStateChanged:(a,cb)=>{authCallback=cb;cb(null);},
-  doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,w)=>({...r,field:w.field,value:w.value}),where:(field,op,value)=>({field,value}),
+  doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,...constraints)=>({...r,constraints}),where:(field,op,value)=>({field,op,value}),orderBy:()=>({}),limit:()=>({}),
   onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
   getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),getDocsFromServer:async r=>{if(failBackupRead)throw new Error("Sin conexión");return snapshot(r);},setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
-  writeBatch:()=>{const pending=[];return {set:(r,d)=>pending.push([r,d]),delete:r=>pending.push([r,null]),commit:async()=>{for(const [r,d]of pending){if(d===null){records.delete(r.path);notify();}else await set(r,d);}}};},
-  runTransaction:async(db,fn)=>fn({get:async r=>snapshot(r),update:set}),
+  writeBatch:()=>{const pending=[];return {set:(r,d,opts)=>pending.push([r,d,opts]),delete:r=>pending.push([r,null]),commit:async()=>{for(const [r,d,opts]of pending){if(d===null){records.delete(r.path);notify();}else await set(r,d,opts);}}};},
+  runTransaction:async(db,fn)=>fn({get:async r=>snapshot(r),update:set,set}),
   serverTimestamp:()=>({server:true}),Timestamp:{fromDate:d=>d},setInterval(){},confirm:()=>true,prompt:()=>'',FileReader:dom.window.FileReader
  });
  vm.runInContext(fs.readFileSync('app.js','utf8').replace(/^import .*;\n/gm,''),ctx);
@@ -73,6 +76,14 @@ const {JSDOM}=deps('jsdom');
  assert.match(document.querySelector('#my-history').textContent,/Cancelada por bloqueo/);
  authCallback({uid:'admin',email:domain.ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});
  assert.equal(document.querySelector('#admin-nav').hidden,false);
+ const originalCaption=document.querySelector('#week-caption').textContent;
+ document.querySelector('#admin-week-next').click();
+ const upcoming=management.shiftWeek(week,1);assert.equal(document.querySelector('#admin-week-date').value,upcoming);
+ assert.equal(document.querySelector('#week-caption').textContent,originalCaption);
+ document.querySelector('#activate-week').click();await new Promise(r=>setImmediate(r));
+ assert.equal(records.get('days/'+upcoming).week,upcoming);
+ assert.ok([...records].some(([p,r])=>p.startsWith('auditLogs/')&&r.event==='Habilitar semana'));
+ document.querySelector('#admin-week-current').click();assert.equal(document.querySelector('#admin-week-date').value,week);
  document.querySelector('#admin-nav').click();assert.equal(document.querySelector('#admin-view').hidden,false);
  records.set('days/'+week,{week,blocked:false,generation:0});
  for(const [key,r]of records)if(key.startsWith('reservations/')&&r.uid==='student')records.set(key,{...r,cancelled:false});
@@ -103,9 +114,13 @@ const {JSDOM}=deps('jsdom');
  document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));
  assert.equal(capturedBackup.projectId,'appcomedor-6b4f7');
  assert.ok(capturedBackup.collections.reservations.some(r=>r.id==='historical'));
- assert.equal(Object.keys(capturedBackup.collections).length,7);
+ assert.equal(Object.keys(capturedBackup.collections).length,9);
  capturedBackup=null;failBackupRead=true;document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));
  assert.equal(capturedBackup,null);assert.match(document.querySelector('#backup-message').textContent,/No se pudo/);failBackupRead=false;
+ document.querySelector('#user-search').value='sin coincidencias';document.querySelector('#user-search').dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert.equal(document.querySelector('[data-delete-user="student"]'),null);
+ document.querySelector('#user-search').value='';document.querySelector('#user-search').dispatchEvent(new dom.window.Event('input',{bubbles:true}));
+ document.querySelector('#report-month').value=week.slice(0,7);document.querySelector('#monthly-generate').click();await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('#monthly-csv').disabled,false);assert.match(document.querySelector('#monthly-results').textContent,/porciones solicitadas/);
+ if(process.env.APP_UI_RENDER){document.querySelector('#admin-nav').click();fs.writeFileSync(process.env.APP_UI_RENDER,dom.serialize());}
  records.set('users/admin',{name:'Admin',condition:'Personal',diet:'',email:domain.ADMIN_EMAIL});
  records.set('users/admin2',{name:'Laura',condition:'Personal',diet:'',email:'marchesemarialaura@gmail.com'});
  notify();
@@ -122,6 +137,17 @@ const {JSDOM}=deps('jsdom');
  records.set('modalities/curso',{name:'Curso',dates:[week],active:true});notify();
  document.querySelector('[data-delete-modality="curso"]').click();await new Promise(r=>setImmediate(r));
  assert.equal(records.has('modalities/curso'),false);
+ records.set('users/template-student',{name:'Plantilla',condition:'Alumno regular',diet:'Sin TACC',email:'template@example.com'});
+ for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
+ authCallback({uid:'template-student',email:'template@example.com',emailVerified:true});
+ document.querySelector('#configure-template').click();assert.equal(document.querySelector('#week-template-dialog').open,true);
+ document.querySelector('#week-template-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
+ assert.equal(records.get('reservationPreferences/template-student').mediodia,2);
+ document.querySelector('#apply-template').click();assert.equal(document.querySelectorAll('[data-day]:checked').length,5);
+ assert.equal([...records].filter(([p,r])=>p.startsWith('reservations/')&&r.uid==='template-student').length,0);
+ document.querySelector('#save-button').click();await new Promise(r=>setImmediate(r));
+ const savedTemplate=[...records].filter(([p,r])=>p.startsWith('reservations/')&&r.uid==='template-student').map(([,r])=>r);
+ assert.equal(savedTemplate.length,10);assert.equal(savedTemplate.filter(r=>r.portions===2&&r.shift==='mediodia').length,5);
  console.log('OK: eliminación individual, masiva, protección de ambos administradores y modalidad.');
  console.log('OK: UI sin sesión, rol alumno/admin, preferencias, ambos turnos, guardado y cancelación actualizada con SDK simulado.');
 })().catch(e=>{console.error(e);process.exitCode=1});

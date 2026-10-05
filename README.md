@@ -64,3 +64,11 @@ El panel administrador permite descargar un respaldo JSON de todos los perfiles,
 ## Asistencias y última conexión
 
 El administrador marca Asistió este día en el listado diario. Una persona suma un solo día aunque vaya a ambos turnos; desmarcar corrige el registro. Solo se admiten fechas de hoy o anteriores. Usuarios registrados muestra el total histórico de días marcados y la última apertura de la app con sesión iniciada (hora Argentina). No es un indicador de conexión en tiempo real ni reconstruye accesos o asistencias anteriores a su activación. Requiere publicar las reglas actualizadas de `attendance` y `userActivity`. Los respaldos v2 incluyen ambos registros y eliminar un usuario también los elimina.
+
+## Gestión completa
+
+El administrador navega entre semanas sin alterar la semana del alumno; prepara días, menú y modalidades de la semana elegida, consulta reservas y PDF anteriores. Usuarios permite buscar por nombre/correo y filtrar condición/rol. El resumen mensual cuenta reservas vigentes, porciones solicitadas y asistencias diarias explícitas, exportable como CSV para Excel. El historial registra cambios del panel con escrituras atómicas y conserva las últimas 100 acciones en pantalla. Consultar ACTIVACION.md para reglas, respaldo diario nativo (requiere Blaze) y App Check pendientes de configuración externa. El aviso público está en privacidad.html.
+
+## Mi semana habitual
+
+Cada alumno guarda días de lunes a viernes y porciones por turno (máximo 2 en total). Usar mi semana prepara los días disponibles, sin confirmar automáticamente; Guardar reserva semanal confirma. Se omiten días bloqueados, no habilitados, vencidos y turnos cancelados, con aviso explícito. Las reservas existentes conservan sus restricciones/modalidad; las nuevas toman preferencias del perfil. La selección fuera de la plantilla se conserva. Las preferencias están en reservationPreferences y se incluyen en respaldo v4, compatible con v1-v3 al recuperar.

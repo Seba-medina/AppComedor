@@ -1,5 +1,5 @@
 export const BACKUP_PROJECT='appcomedor-6b4f7';
-export const BACKUP_COLLECTIONS=['users','days','modalities','menus','reservations','attendance','userActivity'];
+export const BACKUP_COLLECTIONS=['users','days','modalities','menus','reservations','attendance','userActivity','auditLogs','reservationPreferences'];
 export function encodeBackupValue(value){
   if(value&&typeof value.toDate==='function'&&Number.isInteger(value.seconds)&&Number.isInteger(value.nanoseconds))return {$type:'timestamp',seconds:value.seconds,nanoseconds:value.nanoseconds};
   if(Array.isArray(value))return value.map(encodeBackupValue);
@@ -19,11 +19,11 @@ export function decodeBackupValue(value,makeTimestamp){
 }
 export function buildBackup(snapshots,now=new Date()){
   const collections=Object.fromEntries(BACKUP_COLLECTIONS.map(name=>[name,snapshots[name].docs.map(d=>({id:d.id,data:encodeBackupValue(d.data())}))]));
-  return {format:'appcomedor-backup',version:2,projectId:BACKUP_PROJECT,createdAt:now.toISOString(),collections};
+  return {format:'appcomedor-backup',version:4,projectId:BACKUP_PROJECT,createdAt:now.toISOString(),collections};
 }
 export function validateBackup(backup){
-  if(backup?.format!=='appcomedor-backup'||![1,2].includes(backup.version)||backup.projectId!==BACKUP_PROJECT||!Number.isFinite(Date.parse(backup.createdAt)))throw new Error('El archivo no es un respaldo válido de este comedor.');
-  const names=backup.version===1?BACKUP_COLLECTIONS.slice(0,5):BACKUP_COLLECTIONS;
+  if(backup?.format!=='appcomedor-backup'||![1,2,3,4].includes(backup.version)||backup.projectId!==BACKUP_PROJECT||!Number.isFinite(Date.parse(backup.createdAt)))throw new Error('El archivo no es un respaldo válido de este comedor.');
+  const names=backup.version===1?BACKUP_COLLECTIONS.slice(0,5):backup.version===2?BACKUP_COLLECTIONS.slice(0,7):backup.version===3?BACKUP_COLLECTIONS.slice(0,8):BACKUP_COLLECTIONS;
   if(!backup.collections||Object.keys(backup.collections).length!==names.length)throw new Error('Respaldo incompleto.');
   for(const name of names){
     const rows=backup.collections[name],ids=new Set();if(!Array.isArray(rows))throw new Error('Falta la colección '+name);

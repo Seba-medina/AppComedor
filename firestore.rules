@@ -149,6 +149,31 @@ service cloud.firestore {
           && request.resource.data.cancelled == true && request.resource.data.updatedAt==request.time));
       allow delete: if admin() && removableAccount(resource.data.uid);
     }
+    match /reservationPreferences/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || admin());
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['days','mediodia','noche','updatedAt'])
+        && request.resource.data.days is list && request.resource.data.days.size()>0
+        && request.resource.data.days.size()<=5 && request.resource.data.days.hasOnly([0,1,2,3,4])
+        && request.resource.data.days.toSet().size() == request.resource.data.days.size()
+        && request.resource.data.mediodia is int && request.resource.data.noche is int
+        && request.resource.data.mediodia>=0 && request.resource.data.noche>=0
+        && request.resource.data.mediodia+request.resource.data.noche>=1
+        && request.resource.data.mediodia+request.resource.data.noche<=2
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if admin() && removableAccount(uid);
+    }
+    match /auditLogs/{id} {
+      allow read: if admin();
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['actorUid','actorEmail','event','target','detail','createdAt'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == request.auth.token.email
+        && shortText(request.resource.data.event,80) && request.resource.data.event.size()>0
+        && shortText(request.resource.data.target,200) && shortText(request.resource.data.detail,200)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }

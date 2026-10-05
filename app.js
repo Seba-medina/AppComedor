@@ -1,13 +1,18 @@
+import {validateTemplate,applyWeekTemplate} from './week-template.mjs';
+import {RECAPTCHA_ENTERPRISE_SITE_KEY} from './app-check-config.js';
+import {filterUsers,shiftWeek,monthBounds,monthlyReport,reportCsv} from './management.mjs';
 import {BACKUP_COLLECTIONS,buildBackup,downloadBackup} from './backup.mjs';
 import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import {collection,doc,query,where,onSnapshot,getDoc,getDocs,getDocsFromServer,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {collection,doc,query,where,orderBy,limit,onSnapshot,getDoc,getDocs,getDocsFromServer,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,argentinaToday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
+let weekTemplate=null;
+let adminWeek=week,adminDays={},adminReservations=[],adminUnsubs=[],adminVersion=0,adminReady=false,adminRecordsReady=false,monthResult=null;
 let adminDate=week,attendance=[],activity={},attendanceReady=false,activityReady=false;
 const lastAccess=uid=>{const value=activity[uid]?.lastSeen;if(!activityReady)return 'Cargando…';if(!value?.toDate)return 'Sin registro';return new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'}).format(value.toDate());};
 const attended=(uid,date)=>attendance.some(a=>a.uid===uid&&a.dateKey===date&&a.present);
@@ -15,6 +20,8 @@ const attendanceCount=uid=>new Set(attendance.filter(a=>a.uid===uid&&a.present).
 let dataReady=false,reservationsReady=false,busy=false,epoch=0,unsubs=[],menuUnsub;
 const selected=new Map(),dirty=new Set(),collapsedDays=new Set();
 const dates=()=>weekDays(week);
+const adminDates=()=>weekDays(adminWeek);
+const adminActive=r=>reservationStatus(r,adminDays[r.dateKey])==='Confirmada';
 const isActive=r=>reservationStatus(r,days[r.dateKey])==='Confirmada';
 const current=()=>reservations.filter(r=>r.week===week);
 const label=key=>new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(key+'T00:00:00Z'));
@@ -55,6 +62,9 @@ function renderDays(){
   renderFirstUse();
 
   const ready=user&&profile&&dataReady&&reservationsReady;
+  $('#configure-template').disabled=!user||!profile||busy;
+  $('#apply-template').disabled=!ready||!weekTemplate||busy;
+  $('#template-summary').textContent=weekTemplate?weekTemplate.days.map(i=>['Lun','Mar','Mié','Jue','Vie'][i]).join(', ')+' · Mediodía: '+weekTemplate.mediodia+' · Noche: '+weekTemplate.noche+' porciones':'Configurá tus días y porciones habituales para reservar más rápido.';
   if(user&&dataReady&&reservationsReady&&$('#app-status').textContent.includes('Cargando datos'))$('#app-status').textContent=profile?'Datos del comedor actualizados.':'Completá y guardá tu perfil para reservar.';
   $('#save-button').disabled=!ready||busy;
   $('#save-button').textContent=current().some(r=>r.uid===user?.uid&&isActive(r))?'Guardar cambios de mi reserva':'Guardar reserva semanal';
@@ -76,27 +86,46 @@ function renderDays(){
 }
 function renderAdmin(){
   if(!isAdmin)return;
-  const live=current().filter(isActive);
-  $('#total-stat').textContent=live.length;$('#portions-stat').textContent=live.reduce((sum,r)=>sum+r.portions,0);$('#blocked-stat').textContent=Object.values(days).filter(d=>d.blocked).length;
+  const live=adminReservations.filter(adminActive);
+  $('#total-stat').textContent=live.length;$('#portions-stat').textContent=live.reduce((sum,r)=>sum+r.portions,0);$('#blocked-stat').textContent=Object.values(adminDays).filter(d=>d.blocked).length;
   const day=adminDate;
-  $('#admin-days').innerHTML=dates().map((date,i)=>'<button type="button" data-admin-date="'+date+'" aria-pressed="'+(date===day)+'"><strong>'+['Lunes','Martes','Miércoles','Jueves','Viernes'][i]+'</strong><small>'+date.slice(8,10)+'/'+date.slice(5,7)+'</small></button>').join('');
-  $('#admin-day-title').textContent=label(day)+(days[day]?.blocked?' · Día bloqueado':'');
-  $('#download-day-pdf').disabled=!dataReady||!reservationsReady;
+  $('#admin-days').innerHTML=adminDates().map((date,i)=>'<button type="button" data-admin-date="'+date+'" aria-pressed="'+(date===day)+'"><strong>'+['Lunes','Martes','Miércoles','Jueves','Viernes'][i]+'</strong><small>'+date.slice(8,10)+'/'+date.slice(5,7)+'</small></button>').join('');
+  $('#admin-day-title').textContent=label(day)+(adminDays[day]?.blocked?' · Día bloqueado':'');
+  $('#download-day-pdf').disabled=!adminReady||!adminRecordsReady;
   $('#admin-results').innerHTML=SHIFTS.map(shift=>{
     const rows=live.filter(r=>r.dateKey===day&&r.shift===shift);
     return '<div class="shift"><h3>'+shiftLabel(shift)+'<span>'+rows.length+' reservas · '+rows.reduce((sum,r)=>sum+r.portions,0)+' porciones</span></h3>'+(rows.map(r=>'<div class="person"><strong>'+esc(r.name)+'</strong><span>'+esc(r.condition)+' · '+r.portions+' porciones'+(r.modalityId?' · '+esc(modalities.find(c=>c.id===r.modalityId)?.name||'Modalidad especial'):'')+'</span><span>'+esc(r.diet||'—')+'</span><label class="attendance-control"><input type="checkbox" data-attendance="'+esc(r.uid)+'" '+(attended(r.uid,day)?'checked ':'')+(!attendanceReady||busy||day>argentinaToday()?'disabled':'')+'> Asistió este día</label><button data-cancel="'+esc(r.id)+'">Dar de baja</button></div>').join('')||'<p>Sin reservas activas.</p>')+'</div>';
   }).join('');
-  $('#admin-results').innerHTML+='<h3>Cancelaciones</h3>'+(current().filter(r=>r.dateKey===day&&!isActive(r)).map(r=>'<p>'+esc(r.name)+' · '+shiftLabel(r.shift)+' · '+esc(reservationStatus(r,days[r.dateKey]))+'</p>').join('')||'<p>Sin cancelaciones.</p>');
-  $('#block-controls').innerHTML=dates().map(date=>'<div class="block-row"><span>'+esc(label(date))+'</span><button data-block="'+date+'" '+(!days[date]?'disabled':'')+'>'+(days[date]?.blocked?'Desbloquear':'Bloquear')+'</button></div>').join('');
-  $('#condition-list').innerHTML=modalities.filter(c=>c.dates.some(d=>dates().includes(d))).map(c=>'<li><span>'+esc(c.name)+'<small>'+c.dates.map(esc).join(', ')+'</small></span><button data-modality="'+esc(c.id)+'">'+(c.active?'Desactivar':'Activar')+'</button><button class="danger-button" data-delete-modality="'+esc(c.id)+'">Eliminar</button></li>').join('');
-  $('#users-list').innerHTML=users.length?'<div class="users-table-wrap"><table class="users-table"><thead><tr><th>Usuario</th><th>Condición / preferencias</th><th>Última conexión</th><th>Días asistidos</th><th>Acciones</th></tr></thead><tbody>'+users.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong><br><small>'+esc(p.email)+'</small></td><td>'+esc(p.condition)+'<br><small>'+esc(p.diet||'Sin preferencias')+'</small></td><td>'+esc(lastAccess(p.id))+'</td><td>'+(attendanceReady?attendanceCount(p.id):'—')+'</td><td>'+(ADMIN_EMAILS.includes(p.email)?'<span class="admin-protected">Administrador · protegido</span>':'<button class="danger-button" data-delete-user="'+esc(p.id)+'">Eliminar cuenta</button>')+'</td></tr>').join('')+'</tbody></table></div>':'<p>No hay perfiles registrados.</p>';
+  $('#admin-results').innerHTML+='<h3>Cancelaciones</h3>'+(adminReservations.filter(r=>r.dateKey===day&&!adminActive(r)).map(r=>'<p>'+esc(r.name)+' · '+shiftLabel(r.shift)+' · '+esc(reservationStatus(r,adminDays[r.dateKey]))+'</p>').join('')||'<p>Sin cancelaciones.</p>');
+  $('#block-controls').innerHTML=adminDates().map(date=>'<div class="block-row"><span>'+esc(label(date))+'</span><button data-block="'+date+'" '+(!adminDays[date]?'disabled':'')+'>'+(adminDays[date]?.blocked?'Desbloquear':'Bloquear')+'</button></div>').join('');
+  $('#condition-list').innerHTML=modalities.filter(c=>c.dates.some(d=>adminDates().includes(d))).map(c=>'<li><span>'+esc(c.name)+'<small>'+c.dates.map(esc).join(', ')+'</small></span><button data-modality="'+esc(c.id)+'">'+(c.active?'Desactivar':'Activar')+'</button><button class="danger-button" data-delete-modality="'+esc(c.id)+'">Eliminar</button></li>').join('');
+  const visibleUsers=filterUsers(users,$('#user-search').value,$('#user-condition-filter').value,$('#user-role-filter').value,ADMIN_EMAILS);
+  $('#user-count').textContent=visibleUsers.length+' de '+users.length+' usuarios';
+  $('#users-list').innerHTML=visibleUsers.length?'<div class="users-table-wrap"><table class="users-table"><thead><tr><th>Usuario</th><th>Condición / preferencias</th><th>Última conexión</th><th>Días asistidos</th><th>Acciones</th></tr></thead><tbody>'+visibleUsers.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong><br><small>'+esc(p.email)+'</small></td><td>'+esc(p.condition)+'<br><small>'+esc(p.diet||'Sin preferencias')+'</small></td><td>'+esc(lastAccess(p.id))+'</td><td>'+(attendanceReady?attendanceCount(p.id):'—')+'</td><td>'+(ADMIN_EMAILS.includes(p.email)?'<span class="admin-protected">Administrador · protegido</span>':'<button class="danger-button" data-delete-user="'+esc(p.id)+'">Eliminar cuenta</button>')+'</td></tr>').join('')+'</tbody></table></div>':'<p>No hay usuarios que coincidan con los filtros.</p>';
   $('#delete-all-users').disabled=busy||!users.some(p=>!ADMIN_EMAILS.includes(p.email)&&p.id!==user.uid);
 }
+function rebuildAdminControls(){
+  if(!adminDates().includes(adminDate))adminDate=adminWeek;
+  $('#admin-week-date').value=adminWeek;
+  $('.week-badge').textContent=label(adminWeek)+' — '+label(adminDates()[4]);
+  $('#modality-days').innerHTML=adminDates().map((date,i)=>'<label class="modality-date"><input type="checkbox" name="modality-day" value="'+date+'" aria-label="'+esc(label(date))+'"><span><strong>'+['Lun','Mar','Mié','Jue','Vie'][i]+'</strong><small>'+date.slice(8)+'/'+date.slice(5,7)+'</small></span></label>').join('');
+}
 function rebuildWeekControls(){
-  if(!dates().includes(adminDate))adminDate=dates()[0];
-  $('#modality-days').innerHTML=dates().map((date,i)=>'<label class="modality-date"><input type="checkbox" name="modality-day" value="'+date+'" aria-label="'+esc(label(date))+'"><span><strong>'+['Lun','Mar','Mié','Jue','Vie'][i]+'</strong><small>'+date.slice(8)+'/'+date.slice(5,7)+'</small></span></label>').join('');
   $('#week-caption').textContent='ESTA SEMANA · '+label(dates()[0])+' al '+label(dates()[4]);
-  $('.week-badge').textContent=dates()[0]+' — '+dates()[4];
+  rebuildAdminControls();
+}
+function subscribeAdminWeek(){
+  adminUnsubs.forEach(fn=>fn());adminUnsubs=[];adminDays={};adminReservations=[];adminReady=false;adminRecordsReady=false;
+  const version=++adminVersion,session=epoch,guard=fn=>snapshot=>{if(isAdmin&&session===epoch&&version===adminVersion)fn(snapshot);};
+  adminUnsubs.push(onSnapshot(query(collection(db,'days'),where('week','==',adminWeek)),guard(s=>{adminDays=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));adminReady=true;renderAdmin();}),e=>error(e)));
+  adminUnsubs.push(onSnapshot(query(collection(db,'reservations'),where('week','==',adminWeek)),guard(s=>{adminReservations=s.docs.map(d=>({id:d.id,...d.data()}));adminRecordsReady=true;renderAdmin();}),e=>error(e)));
+  adminUnsubs.push(onSnapshot(doc(db,'menus',adminWeek),guard(s=>{const img=$('#admin-menu-preview');img.hidden=!s.exists();if(s.exists())img.src=s.data().image;else img.removeAttribute('src');$('#admin-menu-note').textContent=s.exists()?'Menú de la semana seleccionada.':'Esta semana todavía no tiene menú.';}),e=>error(e)));
+  renderAdmin();
+}
+function changeAdminWeek(value){
+  if(!isAdmin||busy){$('#admin-week-date').value=adminWeek;return;}
+  try{weekDays(value);}catch(e){error(e);return;}
+  adminWeek=value;adminDate=value;rebuildAdminControls();subscribeAdminWeek();
 }
 function watchMenu(){
   menuUnsub?.();
@@ -107,6 +136,8 @@ function watchMenu(){
   },e=>error(e));
 }
 function resetData(){
+  weekTemplate=null;if($('#week-template-dialog').open)$('#week-template-dialog').close();
+  adminUnsubs.forEach(fn=>fn());adminUnsubs=[];adminVersion++;adminDays={};adminReservations=[];adminReady=false;adminRecordsReady=false;monthResult=null;$('#monthly-results').replaceChildren();$('#audit-list').replaceChildren();$('#monthly-csv').disabled=true;$('#admin-menu-preview').hidden=true;$('#admin-menu-preview').removeAttribute('src');
   for(const selector of ['#users-list','#admin-results','#my-history','#condition-list','#block-controls','#admin-days'])$(selector).replaceChildren();
   for(const selector of ['#total-stat','#portions-stat','#blocked-stat'])$(selector).textContent='—';
   $('#profile-form').reset();$('#profile-message').textContent='';$('#save-message').textContent='';
@@ -116,6 +147,7 @@ function resetData(){
 function subscribeData(){
   const session=epoch;
   const guard=fn=>snapshot=>{if(session===epoch)fn(snapshot);};
+  unsubs.push(onSnapshot(doc(db,'reservationPreferences',user.uid),guard(s=>{weekTemplate=s.exists()?s.data():null;renderDays();}),e=>error(e)));
   unsubs.push(onSnapshot(doc(db,'users',user.uid),guard(s=>{
     profile=s.exists()?s.data():null;
     if(document.activeElement?.closest('#profile-form')===null){
@@ -128,11 +160,13 @@ function subscribeData(){
     for(const key of [...selected.keys()])if(days[key]?.blocked||(previous[key]&&previous[key].generation!==days[key]?.generation)){selected.delete(key);dirty.delete(key);}
     hydrate();renderDays();renderAdmin();
   }),e=>error(e)));
-  const q=isAdmin?query(collection(db,'reservations'),where('week','==',week)):query(collection(db,'reservations'),where('uid','==',user.uid));
+  const q=query(collection(db,'reservations'),where('uid','==',user.uid));
   unsubs.push(onSnapshot(q,guard(s=>{reservations=s.docs.map(d=>({id:d.id,...d.data()}));reservationsReady=true;hydrate();renderDays();renderAdmin();}),e=>error(e)));
   unsubs.push(onSnapshot(collection(db,'modalities'),guard(s=>{modalities=s.docs.map(d=>({id:d.id,...d.data()}));if(!document.activeElement?.closest('#day-list'))renderDays();renderAdmin();}),e=>error(e)));
   if(isAdmin)unsubs.push(onSnapshot(collection(db,'users'),guard(s=>{users=s.docs.map(d=>({id:d.id,...d.data()}));renderAdmin();}),e=>error(e)));
   if(isAdmin){
+    subscribeAdminWeek();
+    unsubs.push(onSnapshot(query(collection(db,'auditLogs'),orderBy('createdAt','desc'),limit(100)),guard(s=>{renderAudit(s.docs.map(d=>d.data()));}),e=>{if(session===epoch)$('#audit-list').textContent='No se pudo cargar el historial. Revisá las reglas de Firebase.';}));
     unsubs.push(onSnapshot(collection(db,'attendance'),guard(s=>{attendance=s.docs.map(d=>({id:d.id,...d.data()}));attendanceReady=true;renderAdmin();}),e=>error(e)));
     unsubs.push(onSnapshot(collection(db,'userActivity'),guard(s=>{activity=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));activityReady=true;renderAdmin();}),e=>error(e)));
   }
@@ -143,7 +177,7 @@ $('#login-button').addEventListener('click',async()=>{
 });
 $('#logout-button').addEventListener('click',()=>action(()=>signOut(auth)));
 onAuthStateChanged(auth,u=>{
-  epoch++;resetData();user=u;isAdmin=!!u?.emailVerified&&ADMIN_EMAILS.includes(u.email);
+  epoch++;resetData();adminWeek=monday();adminDate=adminWeek;rebuildAdminControls();user=u;isAdmin=!!u?.emailVerified&&ADMIN_EMAILS.includes(u.email);
   $('#login-button').hidden=!!u;$('#logout-button').hidden=!u;
   $('#admin-nav').hidden=!isAdmin;$('#profile-form').hidden=!u;
   if(!u){$('#profile-panel').hidden=true;$('#profile-toggle').setAttribute('aria-expanded','false');}
@@ -195,30 +229,36 @@ $('#my-history').addEventListener('click',e=>{const id=e.target.dataset.cancelOw
   await setDoc(doc(db,'reservations',id),{cancelled:true,updatedAt:serverTimestamp()},{merge:true});
   dirty.delete(r.dateKey);hydrate();$('#app-status').textContent='Reserva cancelada. El contador de porciones se actualizó.';
 });});
+function logData(event,target,detail=''){return {actorUid:user.uid,actorEmail:user.email,event,target,detail,createdAt:serverTimestamp()};}
+function addAudit(batch,event,target,detail=''){batch.set(doc(collection(db,'auditLogs')),logData(event,target,detail));}
+async function adminSet(ref,data,event,target,options){if(!isAdmin)throw new Error('Acceso reservado al administrador.');const batch=writeBatch(db);if(options)batch.set(ref,data,options);else batch.set(ref,data);addAudit(batch,event,target);await batch.commit();}
+async function adminDelete(ref,event,target){if(!isAdmin)throw new Error('Acceso reservado al administrador.');const batch=writeBatch(db);batch.delete(ref);addAudit(batch,event,target);await batch.commit();}
 $('#activate-week').addEventListener('click',()=>action(async()=>{
-  const batch=writeBatch(db);
-  for(const key of dates()){const ref=doc(db,'days',key),s=await getDoc(ref);if(!s.exists())batch.set(ref,{week,blocked:false,generation:0,cutoff:Timestamp.fromDate(deadline(key)),reason:'',updatedBy:user.uid,updatedAt:serverTimestamp()});}
+  if(!isAdmin)throw new Error('Acceso reservado al administrador.');
+  const batch=writeBatch(db),targetWeek=adminWeek;
+  for(const key of weekDays(targetWeek)){const ref=doc(db,'days',key),s=await getDoc(ref);if(!s.exists())batch.set(ref,{week:targetWeek,blocked:false,generation:0,cutoff:Timestamp.fromDate(deadline(key)),reason:'',updatedBy:user.uid,updatedAt:serverTimestamp()});}
+  addAudit(batch,'Habilitar semana',targetWeek);
   await batch.commit();$('#app-status').textContent='Semana habilitada. Los bloqueos existentes se conservaron.';
 }));
 $('#block-controls').addEventListener('click',e=>{const key=e.target.dataset.block;if(!key||!isAdmin)return;action(async()=>{
-  const day=days[key],count=current().filter(r=>r.dateKey===key&&isActive(r)).length;
+  const day=adminDays[key],count=adminReservations.filter(r=>r.dateKey===key&&adminActive(r)).length;
   if(!day.blocked&&!confirm('Bloquear '+label(key)+' cancela todas las reservas de ambos turnos (actualmente '+count+'). ¿Confirmar?'))return;
   const reason=day.blocked?'':prompt('Motivo del bloqueo (opcional):','')??null;if(reason===null)return;
-  await runTransaction(db,async tx=>{const ref=doc(db,'days',key),s=await tx.get(ref),d=s.data();if(d.blocked!==day.blocked)throw new Error('El estado cambió. Revisá el día y volvé a intentar.');tx.update(ref,{blocked:!d.blocked,generation:d.generation+(d.blocked?0:1),reason:reason.slice(0,160),updatedBy:user.uid,updatedAt:serverTimestamp()});});
+  await runTransaction(db,async tx=>{const ref=doc(db,'days',key),s=await tx.get(ref),d=s.data();if(d.blocked!==day.blocked)throw new Error('El estado cambió. Revisá el día y volvé a intentar.');tx.update(ref,{blocked:!d.blocked,generation:d.generation+(d.blocked?0:1),reason:reason.slice(0,160),updatedBy:user.uid,updatedAt:serverTimestamp()});tx.set(doc(collection(db,'auditLogs')),logData(d.blocked?'Desbloquear día':'Bloquear día',key,reason.slice(0,160)));});
   $('#app-status').textContent=day.blocked?'Día desbloqueado. Las reservas canceladas no se restauran.':'Día bloqueado y reservas canceladas.';
 });});
 $('#admin-results').addEventListener('change',e=>{const uid=e.target.dataset.attendance;if(!uid||!isAdmin||!attendanceReady||busy){renderAdmin();return;}const present=e.target.checked,dateKey=adminDate;action(async()=>{
   if(dateKey>argentinaToday())throw new Error('No se puede marcar asistencia para un día futuro.');
-  await setDoc(doc(db,'attendance',uid+'_'+dateKey),{uid,dateKey,present,updatedBy:user.uid,updatedAt:serverTimestamp()});
+  await adminSet(doc(db,'attendance',uid+'_'+dateKey),{uid,dateKey,present,updatedBy:user.uid,updatedAt:serverTimestamp()},present?'Marcar asistencia':'Quitar asistencia',uid+'_'+dateKey);
   $('#app-status').textContent=present?'Asistencia registrada: suma un día aunque venga a ambos turnos.':'Se quitó la asistencia de este día.';
 });});
-$('#admin-results').addEventListener('click',e=>{const id=e.target.dataset.cancel;if(!id||!isAdmin)return;action(async()=>{if(!confirm('¿Dar de baja esta reserva solicitada por WhatsApp?'))return;await setDoc(doc(db,'reservations',id),{cancelled:true,updatedAt:serverTimestamp()},{merge:true});});});
+$('#admin-results').addEventListener('click',e=>{const id=e.target.dataset.cancel;if(!id||!isAdmin)return;action(async()=>{if(!confirm('¿Dar de baja esta reserva solicitada por WhatsApp?'))return;await adminSet(doc(db,'reservations',id),{cancelled:true,updatedAt:serverTimestamp()},'Cancelar reserva',id,{merge:true});});});
 $('#condition-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
   const name=$('#new-condition').value.trim(),chosen=[...document.querySelectorAll('[name="modality-day"]:checked')].map(e=>e.value);
   if(!name||!chosen.length)throw new Error('Indicá nombre y al menos un día.');
-  await setDoc(doc(collection(db,'modalities')),{name,dates:chosen,active:true,updatedAt:serverTimestamp()});e.target.reset();
+  await adminSet(doc(collection(db,'modalities')),{name,dates:chosen,active:true,updatedAt:serverTimestamp()},'Crear modalidad',name);e.target.reset();
 });});
-$('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.deleteModality;if(!id||!isAdmin)return;action(async()=>{const item=modalities.find(x=>x.id===id);if(!confirm('¿Eliminar la modalidad "'+item.name+'"? Ya no se podrá seleccionar. Las reservas existentes se conservan.'))return;await deleteDoc(doc(db,'modalities',id));$('#app-status').textContent='Modalidad eliminada.';});});
+$('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.deleteModality;if(!id||!isAdmin)return;action(async()=>{const item=modalities.find(x=>x.id===id);if(!confirm('¿Eliminar la modalidad "'+item.name+'"? Ya no se podrá seleccionar. Las reservas existentes se conservan.'))return;await adminDelete(doc(db,'modalities',id),'Eliminar modalidad',id);$('#app-status').textContent='Modalidad eliminada.';});});
 async function removeComedorAccount(uid){
   if(!isAdmin||uid===user.uid)throw new Error('No se puede eliminar una cuenta administradora.');
   const p=await getDoc(doc(db,'users',uid));
@@ -231,27 +271,28 @@ async function removeComedorAccount(uid){
       for(let i=0;i<snapshot.docs.length;i+=450){const batch=writeBatch(db);for(const item of snapshot.docs.slice(i,i+450))batch.delete(doc(db,name,item.id));await batch.commit();}
     }
     await deleteDoc(doc(db,'userActivity',uid));
-    await deleteDoc(doc(db,'users',uid));
+    await deleteDoc(doc(db,'reservationPreferences',uid));
+    await adminDelete(doc(db,'users',uid),'Eliminar usuario',uid);
   }finally{await deleteDoc(lock);}
 }
 $('#users-list').addEventListener('click',e=>{const uid=e.target.dataset.deleteUser;if(!uid||!isAdmin||busy)return;action(async()=>{const p=users.find(x=>x.id===uid);if(!p||ADMIN_EMAILS.includes(p.email))return;if(!confirm('¿Eliminar el perfil y TODAS las reservas de '+p.name+'? Esta acción no se puede deshacer. Podrá volver a registrarse.'))return;await removeComedorAccount(uid);$('#user-delete-message').textContent='Perfil y reservas eliminados.';});});
 $('#delete-all-users').addEventListener('click',()=>{if(!isAdmin||busy)return;action(async()=>{const snapshot=await getDocs(collection(db,'users'));const targets=snapshot.docs.filter(p=>p.id!==user.uid&&!ADMIN_EMAILS.includes(p.data().email));if(!targets.length)return;if(!confirm('¿Eliminar '+targets.length+' perfiles y TODAS sus reservas? Los administradores se conservan. Esta acción no se puede deshacer.'))return;let done=0;try{for(const p of targets){$('#user-delete-message').textContent='Eliminando '+(done+1)+' de '+targets.length+'…';await removeComedorAccount(p.id);done++;}$('#user-delete-message').textContent=done+' perfiles eliminados. Se conservaron los administradores.';}catch(err){$('#user-delete-message').textContent='Se eliminaron '+done+' de '+targets.length+'. La operación se detuvo; podés volver a intentarlo.';throw err;}});});
-$('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.modality;if(!id||!isAdmin)return;action(async()=>{const c=modalities.find(x=>x.id===id);await setDoc(doc(db,'modalities',id),{name:c.name,dates:c.dates,active:!c.active,updatedAt:serverTimestamp()});});});
-$('#menu-upload').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;action(async()=>{
+$('#condition-list').addEventListener('click',e=>{const id=e.target.dataset.modality;if(!id||!isAdmin)return;action(async()=>{const c=modalities.find(x=>x.id===id);await adminSet(doc(db,'modalities',id),{name:c.name,dates:c.dates,active:!c.active,updatedAt:serverTimestamp()},c.active?'Desactivar modalidad':'Activar modalidad',id);});});
+$('#menu-upload').addEventListener('change',e=>{const targetWeek=adminWeek,file=e.target.files[0];if(!file)return;action(async()=>{
   if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>500000)throw new Error('Usá JPG, PNG o WebP de hasta 500 KB.');
   const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('No se pudo leer la imagen.'));reader.readAsDataURL(file);});
-  await setDoc(doc(db,'menus',week),{image,updatedAt:serverTimestamp()});$('#app-status').textContent='Menú publicado para la semana seleccionada.';e.target.value='';
+  await adminSet(doc(db,'menus',targetWeek),{image,updatedAt:serverTimestamp()},'Publicar menú',targetWeek);$('#app-status').textContent='Menú publicado para la semana seleccionada.';e.target.value='';
 });});
 document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',()=>{
   const admin=b.dataset.view==='admin';if(admin&&!isAdmin)return;$('#admin-view').hidden=!admin;$('#student-view').hidden=admin;document.querySelectorAll('.nav-button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderAdmin();
 }));
 $('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
-$('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!dataReady||!reservationsReady)return;downloadPdf(dailyTableReport(adminDate,current(),days[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
+$('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!adminReady||!adminRecordsReady)return;downloadPdf(dailyTableReport(adminDate,adminReservations,adminDays[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
 $('#profile-toggle').addEventListener('click',()=>{const open=$('#profile-panel').hidden;$('#profile-panel').hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.
-setInterval(()=>{const nowWeek=monday();if(nowWeek!==week){week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
+setInterval(()=>{const nowWeek=monday();if(nowWeek!==week){if(adminWeek===week){adminWeek=nowWeek;adminDate=nowWeek;}week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
 
 $('#download-backup').addEventListener('click',()=>{if(!isAdmin||busy)return;action(async()=>{
   const button=$('#download-backup'),message=$('#backup-message');button.disabled=true;message.textContent='Preparando copia de todas las semanas…';
@@ -264,3 +305,29 @@ $('#download-backup').addEventListener('click',()=>{if(!isAdmin||busy)return;act
   }catch(err){message.textContent='No se pudo completar la copia. No se descargó un respaldo parcial.';throw err;}
   finally{button.disabled=false;}
 });});
+
+$('#admin-week-prev').addEventListener('click',()=>changeAdminWeek(shiftWeek(adminWeek,-1)));
+$('#admin-week-next').addEventListener('click',()=>changeAdminWeek(shiftWeek(adminWeek,1)));
+$('#admin-week-current').addEventListener('click',()=>changeAdminWeek(monday()));
+$('#admin-week-date').addEventListener('change',e=>{if(e.target.value)changeAdminWeek(monday(new Date(e.target.value+'T12:00:00-03:00')));});
+for(const id of ['#user-search','#user-condition-filter','#user-role-filter'])$(id).addEventListener('input',renderAdmin);
+function renderAudit(rows){$('#audit-list').innerHTML=rows.length?'<div class="users-table-wrap"><table class="users-table"><thead><tr><th>Fecha</th><th>Administrador</th><th>Acción</th><th>Referencia</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.createdAt?.toDate?new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'}).format(r.createdAt.toDate()):'Guardando…')+'</td><td>'+esc(r.actorEmail)+'</td><td>'+esc(r.event)+'</td><td>'+esc(r.target)+(r.detail?'<br>'+esc(r.detail):'')+'</td></tr>').join('')+'</tbody></table></div>':'<p>Todavía no hay acciones registradas.</p>';}
+$('#report-month').value=argentinaToday().slice(0,7);
+$('#report-month').addEventListener('change',()=>{monthResult=null;$('#monthly-results').textContent='Seleccioná Generar resumen para consultar este mes.';$('#monthly-csv').disabled=true;});
+$('#monthly-generate').addEventListener('click',()=>{if(!isAdmin)return;action(async()=>{
+ const month=$('#report-month').value,session=epoch,[start,end]=monthBounds(month);$('#monthly-results').textContent='Consultando el mes…';monthResult=null;$('#monthly-csv').disabled=true;
+ try{
+ const [rs,ds,ats,us]=await Promise.all([getDocsFromServer(query(collection(db,'reservations'),where('dateKey','>=',start),where('dateKey','<',end))),getDocsFromServer(collection(db,'days')),getDocsFromServer(query(collection(db,'attendance'),where('dateKey','>=',start),where('dateKey','<',end))),getDocsFromServer(collection(db,'users'))]);
+ if(session!==epoch||!isAdmin||month!==$('#report-month').value)return;
+ monthResult=monthlyReport(month,rs.docs.map(d=>d.data()),Object.fromEntries(ds.docs.map(d=>[d.id,d.data()])),ats.docs.map(d=>d.data()),us.docs.map(d=>({id:d.id,...d.data()})));
+ const r=monthResult;$('#monthly-results').innerHTML='<p><strong>'+r.reservations+' reservas · '+r.portions+' porciones solicitadas · '+r.attendance+' asistencias por día · '+r.people+' personas con asistencia</strong></p><div class="users-table-wrap"><table class="users-table"><thead><tr><th>Usuario</th><th>Reservas</th><th>Porciones</th><th>Días reservados</th><th>Días asistidos</th></tr></thead><tbody>'+r.rows.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+p.reservations+'</td><td>'+p.portions+'</td><td>'+p.reservedDays+'</td><td>'+p.attendedDays+'</td></tr>').join('')+'</tbody></table></div>'+(r.rows.length?'':'<p>Sin registros para este mes.</p>');$('#monthly-csv').disabled=false;
+ }catch(e){if(session===epoch)$('#monthly-results').textContent='No se pudo consultar el mes. Volvé a intentarlo.';throw e;}
+});});
+$('#monthly-csv').addEventListener('click',()=>{if(!isAdmin||!monthResult)return;const url=URL.createObjectURL(new Blob([reportCsv(monthResult)],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='resumen-comedor-'+monthResult.month+'.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);});
+
+$('#app-check-status').textContent=RECAPTCHA_ENTERPRISE_SITE_KEY?'App Check: clave del sitio configurada. La exigencia de validación se verifica en Firebase.':'App Check: falta registrar el sitio y configurar la clave pública para activarlo.';
+
+$('#configure-template').addEventListener('click',()=>{if(!user||!profile||busy)return;const config=weekTemplate||{days:[0,1,2,3,4],mediodia:2,noche:0};document.querySelectorAll('[name="template-day"]').forEach(e=>{e.checked=config.days.includes(Number(e.value));});$('#template-mediodia').value=config.mediodia;$('#template-noche').value=config.noche;$('#template-message').textContent='';$('#week-template-dialog').showModal();});
+$('#close-template').addEventListener('click',()=>$('#week-template-dialog').close());
+$('#week-template-form').addEventListener('submit',e=>{e.preventDefault();if(!user||busy)return;action(async()=>{try{const config=validateTemplate({days:[...document.querySelectorAll('[name="template-day"]:checked')].map(e=>Number(e.value)),mediodia:Number($('#template-mediodia').value),noche:Number($('#template-noche').value)});await setDoc(doc(db,'reservationPreferences',user.uid),{...config,updatedAt:serverTimestamp()});$('#week-template-dialog').close();$('#app-status').textContent='Configuración guardada. Tocá Usar mi semana y luego Guardar reserva semanal.';}catch(err){$('#template-message').textContent=err.message;throw err;}});});
+$('#apply-template').addEventListener('click',()=>{if(!user||!profile||!weekTemplate||busy||!dataReady||!reservationsReady)return;try{const result=applyWeekTemplate(weekTemplate,dates(),days,reservations,user.uid,profile,selected);for(const date of result.applied){selected.set(date,result.selection.get(date));dirty.add(date);collapsedDays.delete(date);}renderDays();$('#save-message').textContent=(result.applied.length?'Se configuraron '+result.applied.length+' días. Revisá y tocá Guardar reserva semanal.':'No hay días disponibles para esta configuración.')+(result.skipped.length?' No se aplicó en: '+result.skipped.map(s=>label(s.date)+' ('+s.reason+')').join('; ')+'.':'');if(result.applied.length)$('#save-button').focus();}catch(err){error(err);}});

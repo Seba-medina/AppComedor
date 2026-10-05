@@ -27,3 +27,7 @@ No ejecutar en producción para practicar. Si se borró la cuenta de acceso en A
 Entrar con una cuenta de prueba afectada, comprobar su perfil e historial, y comparar los totales y el PDF del día con la copia. No restablecer días bloqueados para forzar reservas antiguas a quedar activas.
 
 Los respaldos nuevos usan formato v2 e incluyen asistencias y actividad. Los archivos v1 anteriores siguen siendo recuperables, pero no contienen estos registros.
+
+Formato v3: incluye auditLogs. La recuperación mantiene compatibilidad con v1 y v2. El respaldo nativo diario es una opción separada: ver ACTIVACION.md; no quedó activado automáticamente y requiere acceso al proyecto y plan Blaze.
+
+Formato v4: agrega reservationPreferences (configuración habitual de días y porciones). La recuperación individual y la eliminación del usuario incluyen esta configuración.
