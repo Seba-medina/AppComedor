@@ -43,6 +43,9 @@
   "functions": {
     "api/cron/*.js": {
       "maxDuration": 60
+    },
+    "api/email-check.js": {
+      "maxDuration": 60
     }
   }
 }

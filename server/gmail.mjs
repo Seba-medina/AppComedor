@@ -13,3 +13,8 @@ export async function sendGmail(payload,key){
   if(!result.accepted?.length)throw new Error('Gmail did not accept recipient');return result;
  }finally{transporter.close();}
 }
+
+export async function verifyGmail(){
+ const transporter=nodemailer.createTransport(gmailOptions());
+ try{return await transporter.verify();}finally{transporter.close();}
+}

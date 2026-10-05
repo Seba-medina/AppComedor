@@ -1,4 +1,5 @@
-import {createHash,randomUUID,timingSafeEqual} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
+import {validCronAuth} from './cron-auth.mjs';
 import {FieldValue} from 'firebase-admin/firestore';
 import {ADMIN_EMAILS} from '../domain.mjs';
 import {adminDb} from './firebase-admin.mjs';
@@ -6,7 +7,6 @@ import {localSchedule,wantsReminder,reminderMail} from './notifications.mjs';
 import {GMAIL_SENDER,gmailConfigured,sendGmail} from './gmail.mjs';
 import {dailyWorkbook} from './workbook.mjs';
 const id=value=>createHash('sha256').update(value).digest('hex');
-function validAuth(value){const secret=process.env.CRON_SECRET;if(!secret||secret.length<32)return false;const a=Buffer.from(value||''),b=Buffer.from('Bearer '+secret);return a.length===b.length&&timingSafeEqual(a,b);}
 async function release(db,ref,owner){await db.runTransaction(async tx=>{const s=await tx.get(ref);if(s.data()?.owner===owner)tx.delete(ref);});}
 export async function deliver(db,key,payload,{smtpSend=sendGmail}={}){
  const provider=process.env.EMAIL_TRANSPORT==='gmail'?'gmail':'resend';
@@ -34,7 +34,7 @@ export async function deliver(db,key,payload,{smtpSend=sendGmail}={}){
 export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),clock=Date.now,send=deliver,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='GET')return res.status(405).json({error:'Method not allowed'});
- if(!validAuth(req.headers.authorization))return res.status(401).json({error:'Unauthorized'});
+ if(!validCronAuth(req.headers.authorization))return res.status(401).json({error:'Unauthorized'});
  const transport=process.env.EMAIL_TRANSPORT||'resend';
  if(process.env.EMAIL_JOBS_ENABLED!=='true'||!['gmail','resend'].includes(transport)||(transport==='gmail'?!gmailConfigured():(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM))||!process.env.UNSUBSCRIBE_SECRET||process.env.UNSUBSCRIBE_SECRET.length<32)return res.status(503).json({error:'Email jobs not configured'});
  const sender=transport==='gmail'?'Comedor UNER <'+GMAIL_SENDER+'>':process.env.EMAIL_FROM;

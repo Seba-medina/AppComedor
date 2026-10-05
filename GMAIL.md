@@ -34,7 +34,25 @@ Configurar un programador HTTPS que ejecute GET de `/api/cron/reminders` cada mi
 
 Comprobar en sus registros que los lotes terminaron. Los endpoints devuelven 503 si faltan credenciales o queda un lote pendiente; 500 ante un error de envío; 401 sin autorización. Los mensajes aceptados no vuelven a enviarse. Cada lote guarda el cursor de los alumnos procesados.
 
-## Paso 4: prueba y activación
+## Paso 4: comprobación sin correos
+
+Una vez guardadas las siete variables, con EMAIL_JOBS_ENABLED=false, el nuevo despliegue permite comprobar las credenciales desde `/api/email-check`. Requiere la cabecera secreta; no enviar CRON_SECRET por chat ni por URL. Comprueba lectura/escritura/borrado de un documento temporal, sin consultar alumnos, y verifica autenticación SMTP sin enviar correos. SMTP verify no comprueba la entrega en bandeja ni la aceptación de un mensaje específico.
+
+En PowerShell:
+
+```powershell
+$claveComedor = Read-Host "Pegá CRON_SECRET (entrada oculta)" -AsSecureString
+$tokenComedor = [System.Net.NetworkCredential]::new("", $claveComedor).Password
+try {
+    Invoke-RestMethod -Uri "https://appomedoruner.vercel.app/api/email-check" -Headers @{Authorization="Bearer $tokenComedor"} | ConvertTo-Json
+} finally {
+    Remove-Variable claveComedor, tokenComedor -ErrorAction SilentlyContinue
+}
+```
+
+El resultado debe tener ok=true, configuration=ok, firebase=ok, gmail=ok, enabled=false. Se puede compartir ese resultado: no contiene secretos. Si configuration es missing_or_invalid, revisar nombres/valores y desplegar de nuevo. firebase=permission_denied indica revisar el rol de la cuenta de servicio; gmail=authentication_failed indica revisar la contraseña de aplicación/cuenta. Las conexiones fallidas requieren revisar los registros y el acceso del servidor.
+
+## Paso 5: prueba y activación
 
 Las pruebas locales usan Gmail simulado, no verifican el acceso desde Vercel ni la llegada a la bandeja de entrada. Verificar primero con un proyecto y cuentas de prueba. No invocar el job de producción para hacer una prueba sin considerar que enviará a todos los alumnos elegibles cuando esté habilitado.
 
