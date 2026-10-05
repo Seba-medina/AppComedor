@@ -26,7 +26,7 @@ const isActive=r=>reservationStatus(r,days[r.dateKey])==='Confirmada';
 const current=()=>reservations.filter(r=>r.week===week);
 const label=key=>new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(key+'T00:00:00Z'));
 function error(e,target='#app-status'){
-  const messages={'permission-denied':'Firebase rechazó el acceso. Revisá que las reglas de firestore.rules estén publicadas.','auth/unauthorized-domain':'Agregá appomedoruner.vercel.app en los dominios autorizados de Authentication.','auth/operation-not-allowed':'Habilitá Google en Authentication.','auth/popup-blocked':'El navegador bloqueó el acceso con Google. Permití la ventana emergente.','auth/popup-closed-by-user':'Se cerró el acceso con Google. Podés volver a intentarlo.','unavailable':'No hay conexión con Firebase. Volvé a intentar cuando tengas internet.'};
+  const messages={'permission-denied':'No se pudo acceder a esta función. Volvé a iniciar sesión; si el problema continúa, avisá al personal del comedor.','auth/unauthorized-domain':'No se pudo iniciar sesión. Avisá al personal del comedor.','auth/operation-not-allowed':'El acceso con Google no está disponible. Avisá al personal del comedor.','auth/popup-blocked':'El navegador bloqueó el acceso con Google. Permití la ventana emergente.','auth/popup-closed-by-user':'Se cerró el acceso con Google. Podés volver a intentarlo.','unavailable':'No se pudo conectar con el comedor. Revisá tu conexión e intentá nuevamente.'};
   $(target).textContent=messages[e.code]||e.message||'No se pudo completar la operación.';
 }
 async function action(fn){
@@ -166,7 +166,7 @@ function subscribeData(){
   if(isAdmin)unsubs.push(onSnapshot(collection(db,'users'),guard(s=>{users=s.docs.map(d=>({id:d.id,...d.data()}));renderAdmin();}),e=>error(e)));
   if(isAdmin){
     subscribeAdminWeek();
-    unsubs.push(onSnapshot(query(collection(db,'auditLogs'),orderBy('createdAt','desc'),limit(100)),guard(s=>{renderAudit(s.docs.map(d=>d.data()));}),e=>{if(session===epoch)$('#audit-list').textContent='No se pudo cargar el historial. Revisá las reglas de Firebase.';}));
+    unsubs.push(onSnapshot(query(collection(db,'auditLogs'),orderBy('createdAt','desc'),limit(100)),guard(s=>{renderAudit(s.docs.map(d=>d.data()));}),e=>{if(session===epoch)$('#audit-list').textContent='No se pudo cargar el historial. Intentá nuevamente.';}));
     unsubs.push(onSnapshot(collection(db,'attendance'),guard(s=>{attendance=s.docs.map(d=>({id:d.id,...d.data()}));attendanceReady=true;renderAdmin();}),e=>error(e)));
     unsubs.push(onSnapshot(collection(db,'userActivity'),guard(s=>{activity=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));activityReady=true;renderAdmin();}),e=>error(e)));
   }
@@ -325,7 +325,6 @@ $('#monthly-generate').addEventListener('click',()=>{if(!isAdmin)return;action(a
 });});
 $('#monthly-csv').addEventListener('click',()=>{if(!isAdmin||!monthResult)return;const url=URL.createObjectURL(new Blob([reportCsv(monthResult)],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='resumen-comedor-'+monthResult.month+'.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);});
 
-$('#app-check-status').textContent=RECAPTCHA_ENTERPRISE_SITE_KEY?'App Check: clave del sitio configurada. La exigencia de validación se verifica en Firebase.':'App Check: falta registrar el sitio y configurar la clave pública para activarlo.';
 
 const templateDayNames=['Lunes','Martes','Miércoles','Jueves','Viernes'];
 $('#configure-template').addEventListener('click',()=>{
@@ -344,5 +343,5 @@ $('#close-template').addEventListener('click',()=>$('#week-template-dialog').clo
 $('#week-template-form').addEventListener('submit',e=>{e.preventDefault();if(!user||busy)return;action(async()=>{try{
  const schedule={};for(const day of document.querySelectorAll('[name="template-day"]:checked'))schedule[day.value]=Object.fromEntries(SHIFTS.map(shift=>[shift,Number(document.querySelector('[data-template-day="'+day.value+'"][data-template-shift="'+shift+'"]').value)]));
  const config=validateTemplate({schedule});await setDoc(doc(db,'reservationPreferences',user.uid),{...config,updatedAt:serverTimestamp()});$('#week-template-dialog').close();$('#app-status').textContent='Configuración guardada. Tocá Usar mi semana y luego Guardar reserva semanal.';
- }catch(err){$('#template-message').textContent=err.code==='permission-denied'?'No se pudo guardar. El responsable de la app debe publicar las reglas actualizadas de Firestore.':err.message;throw err;}});});
+ }catch(err){$('#template-message').textContent=err.code==='permission-denied'?'No se pudo guardar la configuración. Volvé a iniciar sesión; si el problema continúa, avisá al personal del comedor.':err.message;throw err;}});});
 $('#apply-template').addEventListener('click',()=>{if(!user||!profile||!weekTemplate||busy||!dataReady||!reservationsReady)return;try{const result=applyWeekTemplate(weekTemplate,dates(),days,reservations,user.uid,profile,selected);for(const date of result.applied){selected.set(date,result.selection.get(date));dirty.add(date);collapsedDays.delete(date);}renderDays();$('#save-message').textContent=(result.applied.length?'Se configuraron '+result.applied.length+' días. Revisá y tocá Guardar reserva semanal.':'No hay días disponibles para esta configuración.')+(result.skipped.length?' No se aplicó en: '+result.skipped.map(s=>label(s.date)+' ('+s.reason+')').join('; ')+'.':'');if(result.applied.length)$('#save-button').focus();}catch(err){error(err);}});
