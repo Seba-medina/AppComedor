@@ -72,3 +72,7 @@ El administrador navega entre semanas sin alterar la semana del alumno; prepara 
 ## Mi semana habitual
 
 Cada alumno guarda una configuración independiente para cada día de lunes a viernes: porciones al mediodía y a la noche (máximo 2 en total por día). El campo schedule guarda solo los días elegidos; las preferencias anteriores con turnos iguales se convierten al leerlas. Usar mi semana prepara los días disponibles, sin confirmar automáticamente; Guardar reserva semanal confirma. Se omiten días bloqueados, no habilitados, vencidos y turnos cancelados, con aviso explícito. Las reservas existentes conservan sus restricciones/modalidad; las nuevas toman preferencias del perfil. La selección fuera de la plantilla se conserva. Las preferencias están en reservationPreferences y se incluyen en respaldo v4, compatible con v1-v3 al recuperar.
+
+## Recordatorios y Excel por correo
+
+El perfil permite desactivar recordatorios. Las rutas protegidas de servidor generan Excel para administradores y recordatorios para alumnos sin reserva. Están desactivadas hasta configurar credenciales, publicar reglas y habilitar el servicio. Ver `EMAILS.md` para activación, programación con reintentos y límites. No se enviaron correos reales desde las pruebas.

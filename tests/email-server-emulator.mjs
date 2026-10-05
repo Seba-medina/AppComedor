@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {initializeApp} from 'firebase-admin/app';import {getFirestore} from 'firebase-admin/firestore';
+import {emailJob} from '../server/email-job.mjs';import unsubscribe from '../api/unsubscribe.js';
+import {reminderToken} from '../server/notifications.mjs';
+assert.ok(process.env.FIRESTORE_EMULATOR_HOST,'Run only inside Firestore emulator');
+initializeApp({projectId:'demo-appcomedor'});const db=getFirestore();
+const secret='only-emulator-secret-'.repeat(3);Object.assign(process.env,{CRON_SECRET:secret,UNSUBSCRIBE_SECRET:secret,EMAIL_JOBS_ENABLED:'true',RESEND_API_KEY:'emulator',EMAIL_FROM:'Comedor <emulator@example.com>'});
+const req={method:'GET',headers:{authorization:'Bearer '+secret}};
+const response=()=>({code:200,setHeader(){},status(n){this.code=n;return this;},json(v){this.body=v;return this;},send(v){this.body=v;return this;}});
+await db.collection('days').doc('2026-10-05').set({generation:2,blocked:false});
+for(const [uid,extra] of [['a',{}],['b',{}],['c',{reminderEmails:false}],['d',{}],['e',{}]])await db.collection('users').doc(uid).set({name:uid,email:uid+'@example.com',...extra});
+await db.collection('reservations').doc('d-day').set({uid:'d',dateKey:'2026-10-05',generation:2,portions:1,shift:'mediodia',name:'d'});
+await db.collection('reservations').doc('e-day').set({uid:'e',dateKey:'2026-10-05',generation:2,cancelled:true,portions:1,shift:'mediodia',name:'e'});
+const original=global.fetch,requests=[];let tick=0,partial=true;
+global.fetch=async(url,opts)=>{assert.equal(url,'https://api.resend.com/emails');requests.push(JSON.parse(opts.body));return {ok:true,json:async()=>({id:'simulated-'+requests.length})};};
+try{
+ const opts={getDb:()=>db,now:()=>new Date('2026-10-05T09:00:00-03:00'),clock:()=>tick,pause:async()=>{if(partial)tick=40000;}};
+ let res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,503);assert.equal(requests.length,1);
+ const cursor=(await db.collection('emailJobProgress').doc('reminders_2026-10-05').get()).data();assert.equal(cursor.lastUid,'a');
+ partial=false;tick=0;res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,200);assert.equal(requests.length,2);assert.deepEqual(requests.map(r=>r.to[0]),['a@example.com','b@example.com']);
+ res=response();await emailJob(req,res,'reminders',opts);assert.equal(requests.length,2);assert.equal(res.body.done,true);
+ const token=reminderToken('b',secret);res=response();await unsubscribe({method:'GET',query:{token}},res);assert.equal((await db.collection('users').doc('b').get()).data().reminderEmails,undefined);
+ res=response();await unsubscribe({method:'POST',query:{token}},res);assert.equal(res.code,200);assert.equal((await db.collection('users').doc('b').get()).data().reminderEmails,false);
+ res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:05:00-03:00')});assert.equal(res.code,200);assert.equal(requests.length,4);
+ assert.deepEqual(requests.slice(2).map(r=>r.to[0]),['sebastianezequielmedina@gmail.com','marchesemarialaura@gmail.com']);assert.ok(requests[2].attachments[0].filename.endsWith('.xlsx'));
+ res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:06:00-03:00')});assert.equal(requests.length,4);
+ console.log('OK: emulador del servidor, lotes/cursor, exclusiones, reintentos sin duplicados, baja GET/POST y Excel solo a administradores; proveedor simulado.');
+}finally{global.fetch=original;await db.terminate();}

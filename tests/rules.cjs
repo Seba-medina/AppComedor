@@ -32,6 +32,15 @@ const assert=require('node:assert/strict');
   await assertFails(setDoc(doc(guest,'users','student'),profile));
   await assertSucceeds(setDoc(doc(student,'users','student'),profile));
   await assertFails(setDoc(doc(student,'users','student'),{...profile,role:'admin'}));
+  await assertSucceeds(rawSetDoc(doc(student,'users','student'),{...profile,reminderEmails:false}));
+  await assertFails(rawSetDoc(doc(student,'users','student'),{...profile,reminderEmails:'false'}));
+  await assertFails(rawSetDoc(doc(other,'users','student'),{...profile,reminderEmails:false}));
+  await assertSucceeds(rawSetDoc(doc(student,'users','student'),profile));
+  for(const name of ['emailDeliveries','emailJobProgress','emailJobLocks']){
+   await assertFails(rawSetDoc(doc(student,name,'fake'),{state:'sent'}));
+   await assertFails(getDocs(collection(student,name)));
+   await assertFails(rawSetDoc(doc(admin,name,'fake'),{state:'sent'}));
+  }
   await assertFails(getDoc(doc(other,'users','student')));
   await assertSucceeds(getDoc(doc(admin,'users','student')));
   const admin2=env.authenticatedContext('admin2',claims('marchesemarialaura@gmail.com')).firestore();

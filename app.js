@@ -151,7 +151,7 @@ function subscribeData(){
   unsubs.push(onSnapshot(doc(db,'users',user.uid),guard(s=>{
     profile=s.exists()?s.data():null;
     if(document.activeElement?.closest('#profile-form')===null){
-      $('#profile-name').value=profile?.name||user.displayName||'';$('#profile-condition').value=profile?.condition||'Alumno regular';$('#profile-diet').value=profile?.diet||'';
+      $('#profile-name').value=profile?.name||user.displayName||'';$('#profile-condition').value=profile?.condition||'Alumno regular';$('#profile-diet').value=profile?.diet||'';$('#profile-reminders').checked=profile?.reminderEmails!==false;
     }
     renderDays();
   }),e=>error(e)));
@@ -191,7 +191,7 @@ onAuthStateChanged(auth,u=>{
 $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
   if(!user)throw new Error('Iniciá sesión.');
   const name=$('#profile-name').value.trim();if(!name)throw new Error('Ingresá tu nombre y apellido.');
-  await setDoc(doc(db,'users',user.uid),{name,condition:$('#profile-condition').value,diet:$('#profile-diet').value.trim(),email:user.email,updatedAt:serverTimestamp()});
+  await setDoc(doc(db,'users',user.uid),{name,condition:$('#profile-condition').value,diet:$('#profile-diet').value.trim(),email:user.email,reminderEmails:$('#profile-reminders').checked,updatedAt:serverTimestamp()});
   $('#profile-message').textContent='Perfil guardado. Las nuevas selecciones usarán estas preferencias.';$('#app-status').textContent='Perfil actualizado.';
 });});
 $('#day-list').addEventListener('click',e=>{

@@ -1,6 +1,15 @@
 {
   "indexes": [],
   "fieldOverrides": [
-    {"collectionGroup":"menus","fieldPath":"image","indexes":[]}
+    {
+      "collectionGroup": "menus",
+      "fieldPath": "image",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "emailDeliveries",
+      "fieldPath": "payload",
+      "indexes": []
+    }
   ]
 }

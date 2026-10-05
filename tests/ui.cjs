@@ -49,6 +49,13 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelector('#admin-nav').hidden,true);
  document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));assert.equal(capturedBackup,null);
  assert.equal(document.querySelector('#profile-form').hidden,false);
+ assert.equal(document.querySelector('#profile-reminders').checked,true);
+ document.querySelector('#profile-reminders').checked=false;
+ document.querySelector('#profile-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
+ assert.equal(records.get('users/student').reminderEmails,false);
+ authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
+ assert.equal(document.querySelector('#profile-reminders').checked,false);
+
  const check=selector=>{const e=document.querySelector(selector);assert.ok(e,selector);e.checked=true;e.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
  check('[data-day="'+week+'"]');
  check('[data-date="'+week+'"][data-shift="mediodia"]');
