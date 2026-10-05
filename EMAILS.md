@@ -1,5 +1,7 @@
 # Correos automáticos del comedor
 
+**Remitente elegido: `comedorunerfcal@gmail.com`.** Ver `GMAIL.md` para la configuración actual, que no necesita dominio. Resend sigue disponible como alternativa futura.
+
 ## Estado
 
 Implementación preparada; no se enviaron correos reales. No activar `EMAIL_JOBS_ENABLED` hasta completar las credenciales, las reglas y una prueba con un proyecto/cuentas de prueba. La conexión disponible a Vercel no autoriza consultar o modificar la configuración del equipo del proyecto: no se cargaron secretos ni se activó el servicio.
@@ -9,9 +11,9 @@ Implementación preparada; no se enviaron correos reales. No activar `EMAIL_JOBS
 - No recuerda días sin habilitar, bloqueados, sábados ni domingos. Una reserva activa en cualquier turno o una cancelación expresa en la generación vigente evita el recordatorio. Reserva de generaciones anteriores no cuenta.
 - Hora de Argentina: recordatorios entre 09:00 y antes de 10:00; reporte a partir de 10:05. No acepta fecha, destinatario ni contenido externo: calcula el día en el servidor.
 - Mi perfil permite desactivar y reactivar; el enlace firmado del correo abre una confirmación. Solo POST desactiva, para que los escáneres de enlaces no den de baja automáticamente.
-- Resend recibe un correo individual por alumno; no se comparte una lista de destinatarios. Dos correos individuales con el mismo Excel para administradores.
+- El proveedor recibe un correo individual por alumno; no se comparte una lista de destinatarios. Dos correos individuales con el mismo Excel para administradores.
 
-## 1. Remitente y Resend
+## 1. Alternativa futura: remitente y Resend
 
 Crear una cuenta de Resend, verificar un dominio propio con sus registros DNS y definir un remitente, por ejemplo `Comedor <reservas@DOMINIO-VERIFICADO>`. El dominio `vercel.app` y una dirección Gmail personal no se pueden usar como dominio remitente propio. El remitente de pruebas `onboarding@resend.dev` no sirve para enviar a todos los alumnos: tiene restricciones de destinatarios.
 
@@ -24,6 +26,8 @@ Crear una cuenta de servicio dedicada en `appcomedor-6b4f7`, con permisos mínim
 Este servicio utiliza Admin SDK, que no usa las reglas del cliente: las rutas de envío exigen un secreto, calculan destinatarios internamente y nunca aceptan listas ni contenido arbitrario. Las colecciones `emailDeliveries`, `emailJobProgress` y `emailJobLocks` no admiten acceso desde la app, ni para administradores de la interfaz.
 
 ## 3. Variables de Production en Vercel
+
+Para Gmail, seguir la tabla de `GMAIL.md`; `RESEND_API_KEY` y `EMAIL_FROM` de esta tabla solo aplican a Resend.
 
 | Variable | Valor |
 |---|---|
@@ -48,7 +52,7 @@ Alternativa Vercel Pro, previa decisión sobre el plan: sustituir las dos expres
 
 Los recordatorios trabajan en lotes de unos 35 segundos y guardan cursor por usuario. Un lote incompleto devuelve 503 para solicitar otro intento; el siguiente continúa desde el cursor. Si solo se ejecuta una vez, puede quedar incompleto. Los alumnos añadidos antes del cursor durante el proceso o después de completarse la lista entran al siguiente día. Antes de cada envío se vuelve a comprobar baja, reserva, bloqueo y eliminación. Una reserva hecha al mismo instante en que el proveedor acepta el correo puede cruzarse con el aviso; no existe una transacción atómica entre Firestore y el proveedor.
 
-La API de Resend usa una clave estable por día/tipo/destinatario y conserva el payload exacto del primer intento. Su idempotencia dura 24 horas. El registro de Firestore conserva el estado enviado; una ejecución ya completada no vuelve a enviar. Si el proveedor acepta y falla la escritura del estado, el reintento en la misma jornada reutiliza la misma clave y contenido. Errores de cupo/proveedor detienen el lote y requieren reintentos/atención del operador.
+Con el transporte Resend, la API usa una clave estable por día/tipo/destinatario y conserva el payload exacto del primer intento. Su idempotencia dura 24 horas. El registro de Firestore conserva el estado enviado; una ejecución ya completada no vuelve a enviar. Si el proveedor acepta y falla la escritura del estado, el reintento en la misma jornada reutiliza la misma clave y contenido. Errores de cupo/proveedor detienen el lote y requieren reintentos/atención del operador.
 
 ## 5. Verificación antes de activar en producción
 

@@ -30,7 +30,7 @@ test('Excel real: dos turnos, Unicode, columnas de asistencia y totales de reser
  assert.deepEqual(book.worksheets.map(s=>s.name),['Mediodía','Noche','Resumen']);assert.equal(book.getWorksheet('Mediodía').getCell('A4').value,'Ángela');assert.equal(book.getWorksheet('Mediodía').getCell('C5').value,2);
  assert.equal(book.getWorksheet('Noche').getCell('A4').type,ExcelJS.ValueType.String);assert.equal(book.getWorksheet('Resumen').getCell('C6').value,3);assert.equal(book.getWorksheet('Mediodía').getCell('F3').value,'Asistió');
 });
-function mockDb(){let value=null;const ref={get:async()=>({exists:!!value,data:()=>value}),update:async d=>{value={...value,...d};}};const db={collection:()=>({doc:()=>ref}),runTransaction:async fn=>fn({get:()=>ref.get(),create:(_,d)=>{value=d;}})};return {db,ref,get:()=>value};}
+function mockDb(){let value=null;const ref={get:async()=>({exists:!!value,data:()=>value}),update:async d=>{value={...value,...d};}};const db={collection:()=>({doc:()=>ref}),runTransaction:async fn=>fn({get:()=>ref.get(),create:(_,d)=>{value=d;},update:(_,d)=>{value={...value,...d};}})};return {db,ref,get:()=>value};}
 test('Reintentos reutilizan el mismo payload y clave; un correo enviado no vuelve a salir',async()=>{
  const state=mockDb(),original=global.fetch,requests=[];global.fetch=async(_,opts)=>{requests.push(opts);return {ok:true,json:async()=>({id:'provider-id'})};};
  try{
@@ -49,4 +49,23 @@ test('Endpoints cerrados sin secreto, credenciales o token; GET de baja solo con
   process.env.UNSUBSCRIBE_SECRET=secret;res=response();await unsubscribe({method:'GET',query:{token:reminderToken('u',secret)}},res);assert.equal(res.code,200);assert.ok(res.body.includes('method="post"'));assert.ok(!res.body.includes('Recordatorios desactivados'));
   res=response();await unsubscribe({method:'POST',query:{token:'invalid'}},res);assert.equal(res.code,400);
  }finally{for(const k of ['CRON_SECRET','EMAIL_JOBS_ENABLED','UNSUBSCRIBE_SECRET'])if(previous[k]===undefined)delete process.env[k];else process.env[k]=previous[k];}
+});
+test('Gmail marca antes de enviar; SMTP incierto no se reintenta y una aceptación no se duplica',async()=>{
+ const previous=process.env.EMAIL_TRANSPORT;process.env.EMAIL_TRANSPORT='gmail';
+ try{
+  let calls=0;const failed=mockDb();const failSend=async()=>{calls++;throw new Error('socket lost after DATA');};
+  await assert.rejects(deliver(failed.db,'gmail-uncertain',{to:['u@example.com']},{smtpSend:failSend}));assert.equal(failed.get().state,'uncertain');
+  assert.equal(await deliver(failed.db,'gmail-uncertain',{}, {smtpSend:failSend}),false);assert.equal(calls,1);
+  const good=mockDb();const accept=async()=>{calls++;assert.equal(good.get().state,'sending');return {messageId:'gmail-id'};};
+  assert.equal(await deliver(good.db,'gmail-good',{to:['u@example.com']},{smtpSend:accept}),true);assert.equal(good.get().state,'sent');
+  assert.equal(await deliver(good.db,'gmail-good',{}, {smtpSend:accept}),false);assert.equal(calls,2);
+  const auth=mockDb();await assert.rejects(deliver(auth.db,'gmail-auth',{}, {smtpSend:async()=>{throw Object.assign(new Error('auth'),{code:'EAUTH'});}}));assert.equal(auth.get().state,'pending');
+ }finally{if(previous===undefined)delete process.env.EMAIL_TRANSPORT;else process.env.EMAIL_TRANSPORT=previous;}
+});
+test('Gmail limita el remitente a la cuenta del comedor y exige contraseña de aplicación',async()=>{
+ const {gmailOptions,gmailConfigured}=await import('../server/gmail.mjs');const previous={...process.env};
+ try{
+  process.env.GMAIL_USER='otro@gmail.com';process.env.GMAIL_APP_PASSWORD='abcdefghijklmnop';assert.equal(gmailConfigured(),false);assert.throws(()=>gmailOptions());
+  process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcd efgh ijkl mnop';assert.equal(gmailConfigured(),true);const config=gmailOptions();assert.equal(config.secure,true);assert.equal(config.port,465);assert.equal(config.auth.pass,'abcdefghijklmnop');
+ }finally{for(const key of ['GMAIL_USER','GMAIL_APP_PASSWORD'])if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
 });

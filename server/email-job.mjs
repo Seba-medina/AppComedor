@@ -3,15 +3,27 @@ import {FieldValue} from 'firebase-admin/firestore';
 import {ADMIN_EMAILS} from '../domain.mjs';
 import {adminDb} from './firebase-admin.mjs';
 import {localSchedule,wantsReminder,reminderMail} from './notifications.mjs';
+import {GMAIL_SENDER,gmailConfigured,sendGmail} from './gmail.mjs';
 import {dailyWorkbook} from './workbook.mjs';
 const id=value=>createHash('sha256').update(value).digest('hex');
 function validAuth(value){const secret=process.env.CRON_SECRET;if(!secret||secret.length<32)return false;const a=Buffer.from(value||''),b=Buffer.from('Bearer '+secret);return a.length===b.length&&timingSafeEqual(a,b);}
 async function release(db,ref,owner){await db.runTransaction(async tx=>{const s=await tx.get(ref);if(s.data()?.owner===owner)tx.delete(ref);});}
-export async function deliver(db,key,payload){
+export async function deliver(db,key,payload,{smtpSend=sendGmail}={}){
+ const provider=process.env.EMAIL_TRANSPORT==='gmail'?'gmail':'resend';
  const ref=db.collection('emailDeliveries').doc(id(key));
  // Persist the exact provider payload before sending: retries use identical content.
- const stored=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(s.exists)return s.data();const d={state:'pending',payload,createdAt:FieldValue.serverTimestamp()};tx.create(ref,d);return d;});
- if(stored.state==='sent')return false;
+ const stored=await db.runTransaction(async tx=>{const s=await tx.get(ref);if(s.exists)return s.data();const d={state:'pending',provider,payload,createdAt:FieldValue.serverTimestamp()};tx.create(ref,d);return d;});
+ if(['sent','sending','uncertain'].includes(stored.state))return false;
+ if((stored.provider||'resend')!==provider)throw new Error('Pending delivery uses a different transport');
+ if(provider==='gmail'){
+  // SMTP has no provider idempotency key. Claim before network I/O and never
+  // retry an ambiguous outcome automatically: acceptance may already have happened.
+  const claimed=await db.runTransaction(async tx=>{const current=await tx.get(ref);if(current.data()?.state!=='pending')return false;tx.update(ref,{state:'sending',attemptAt:FieldValue.serverTimestamp()});return true;});
+  if(!claimed)return false;
+  try{const result=await smtpSend(stored.payload,key);await ref.update({state:'sent',providerId:result.messageId,sentAt:FieldValue.serverTimestamp()});return true;}
+  catch(err){await ref.update({state:err.code==='EAUTH'?'pending':'uncertain',failedAt:FieldValue.serverTimestamp()}).catch(()=>{});throw new Error(err.code==='EAUTH'?'Gmail authentication failed':'Gmail delivery outcome requires review');}
+ }
+
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
  try{
   const r=await fetch('https://api.resend.com/emails',{method:'POST',signal:controller.signal,headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify(stored.payload)});
@@ -19,11 +31,13 @@ export async function deliver(db,key,payload){
   await ref.update({state:'sent',providerId:result.id,sentAt:FieldValue.serverTimestamp()});return true;
  }finally{clearTimeout(timer);}
 }
-export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),clock=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
+export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),clock=Date.now,send=deliver,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='GET')return res.status(405).json({error:'Method not allowed'});
  if(!validAuth(req.headers.authorization))return res.status(401).json({error:'Unauthorized'});
- if(process.env.EMAIL_JOBS_ENABLED!=='true'||!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM||!process.env.UNSUBSCRIBE_SECRET||process.env.UNSUBSCRIBE_SECRET.length<32)return res.status(503).json({error:'Email jobs not configured'});
+ const transport=process.env.EMAIL_TRANSPORT||'resend';
+ if(process.env.EMAIL_JOBS_ENABLED!=='true'||!['gmail','resend'].includes(transport)||(transport==='gmail'?!gmailConfigured():(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM))||!process.env.UNSUBSCRIBE_SECRET||process.env.UNSUBSCRIBE_SECRET.length<32)return res.status(503).json({error:'Email jobs not configured'});
+ const sender=transport==='gmail'?'Comedor UNER <'+GMAIL_SENDER+'>':process.env.EMAIL_FROM;
  const timing=localSchedule(kind,now());if(!timing.allowed)return res.status(200).json({skipped:true});
  let db,lock,owner;const began=clock(),counts={sent:0,skipped:0};
  try{
@@ -35,7 +49,7 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
    const snapshot=await db.collection('reservations').where('dateKey','==',timing.date).get(),records=snapshot.docs.map(d=>d.data());
    const modalities=await db.collection('modalities').get(),names=new Map(modalities.docs.map(d=>[d.id,d.data().name]));
    const content=(await dailyWorkbook(timing.date,records.map(r=>({...r,modalityName:r.modalityId?(names.get(r.modalityId)||'Modalidad eliminada'):'Habitual'})),day)).toString('base64');
-   for(const email of ADMIN_EMAILS){await pause(600);const payload={from:process.env.EMAIL_FROM,to:[email],subject:'Reservas del comedor · '+timing.date,text:'Adjuntamos las reservas y porciones del día. La planilla refleja los datos al generarla. Consultá el panel por cambios posteriores.',attachments:[{filename:'reservas-'+timing.date+'.xlsx',content}]};counts[await deliver(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
+   for(const email of ADMIN_EMAILS){await pause(600);const payload={from:sender,to:[email],subject:'Reservas del comedor · '+timing.date,text:'Adjuntamos las reservas y porciones del día. La planilla refleja los datos al generarla. Consultá el panel por cambios posteriores.',attachments:[{filename:'reservas-'+timing.date+'.xlsx',content}]};counts[await send(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
   }else if(!day.blocked){
    const progressRef=db.collection('emailJobProgress').doc('reminders_'+timing.date),progress=(await progressRef.get()).data();
    if(progress?.done)return res.status(200).json({done:true,...counts});
@@ -55,7 +69,7 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
       else {
        if(!localSchedule(kind,now()).allowed)return res.status(200).json({closed:true,...counts});
        const mail=reminderMail(doc.id,profile,timing.date,process.env.UNSUBSCRIBE_SECRET);
-       counts[await deliver(db,sentKey,{from:process.env.EMAIL_FROM,...mail})?'sent':'skipped']++;
+       counts[await send(db,sentKey,{from:sender,...mail})?'sent':'skipped']++;
        await pause(600);
       }
      }
