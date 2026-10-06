@@ -2,7 +2,7 @@
   {
     "target": "app.js",
     "source": "security/claims/app.js",
-    "originalBlobSha": "30a389b5dbbfa3ae32ba0032dc81959fe06a6fe8"
+    "originalBlobSha": "22201537a7e1efb8a42bb7ad1ae4f149273bdfe5"
   },
   {
     "target": "domain.mjs",

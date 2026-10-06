@@ -19,6 +19,8 @@ function renderAccess(){
   $('#welcome-screen').hidden=signed;
   $('.topbar').hidden=!signed;
   $('#inicio').hidden=!signed;
+  $('#inicio').classList.toggle('registration-layout',signed&&!complete);
+  if(signed&&!profileLoaded)$('#profile-panel').hidden=true;
   $('#app-status').hidden=!signed;
   $('.branded-footer').hidden=!signed;
   $('.view-nav').hidden=!complete;
