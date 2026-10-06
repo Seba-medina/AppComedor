@@ -5,11 +5,11 @@ export async function dailyWorkbook(date,records,day,generatedAt=new Date()){
  for(const shift of ['mediodia','noche']){
   const sheet=book.addWorksheet(shift==='mediodia'?'Mediodía':'Noche');
   sheet.addRow(['Reservas del '+date]);sheet.addRow(['Generado',generatedAt.toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'})]);
-  sheet.addRow(['Nombre y apellido','Condición','Porciones','Restricciones','Modalidad','Asistió']);
-  const rows=reportRows(records.filter(r=>r.shift===shift),day);for(const row of rows)sheet.addRow([...row,'']);
+  sheet.addRow(['Nombre y apellido','Condición','Porciones','Restricciones','Modalidad','Asistió','Fecha y hora de reserva (Argentina)']);
+  const rows=reportRows(records.filter(r=>r.shift===shift),day);for(const row of rows)sheet.addRow([...row.slice(0,5),'',row[5]]);
   sheet.addRow(['Total de porciones','',rows.reduce((n,r)=>n+r[2],0)]);
-  sheet.getRow(3).font={bold:true};sheet.columns.forEach((c,i)=>{c.width=[32,22,12,32,25,12][i];});
-  sheet.views=[{state:'frozen',ySplit:3}];sheet.autoFilter={from:{row:3,column:1},to:{row:Math.max(3,3+rows.length),column:6}};
+  sheet.getRow(3).font={bold:true};sheet.columns.forEach((c,i)=>{c.width=[32,22,12,32,25,12,30][i];});
+  sheet.views=[{state:'frozen',ySplit:3}];sheet.autoFilter={from:{row:3,column:1},to:{row:Math.max(3,3+rows.length),column:7}};
   sheet.pageSetup={orientation:'portrait',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0};
  }
  const summary=book.addWorksheet('Resumen');summary.addRows([['Fecha',date],['Estado',day.blocked?'Sin servicio':'Habilitado'],['Turno','Reservas','Porciones']]);

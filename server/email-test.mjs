@@ -21,7 +21,7 @@ export async function emailTest(req,res,{getDb=adminDb,send=deliver,now=()=>new 
    const content=(await dailyWorkbook(date,records,day,now())).toString('base64');
    payload={...payload,subject:'Prueba de Excel · Reservas del '+date,text:'Adjuntamos las reservas del día en un Excel editable, con hojas de Mediodía, Noche y Resumen. Podés completar la columna Asistió en Excel o importar el archivo en Google Sheets. Es una copia: los cambios no se guardan en la app. Esta prueba no activa los envíos automáticos.',attachments:[{filename:'reservas-'+date+'.xlsx',content}]};
   }
-  const sent=await send(db,(kind==='excel'?'gmail_excel_test_':'gmail_test_')+date,payload);
+  const sent=await send(db,(kind==='excel'?'gmail_excel_test_v2_':'gmail_test_')+date,payload);
   return res.status(200).json({ok:true,sent,alreadyProcessed:!sent,enabled:process.env.EMAIL_JOBS_ENABLED==='true'});
  }catch{return res.status(500).json({error:'Test delivery failed; check delivery record before retrying'});}
 }

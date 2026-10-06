@@ -24,4 +24,9 @@ export function reminderMail(uid,profile,date,secret){
  const unsubscribe=APP_URL+'/api/unsubscribe?token='+encodeURIComponent(reminderToken(uid,secret));
  return {to:[profile.email],headers:{'List-Unsubscribe':'<'+unsubscribe+'>'},subject:'Recordatorio: reservá tu comida de hoy',text:`Hola ${profile.name}. Todavía no tenés una reserva para hoy (${date}). Si vas al comedor, reservá antes de las 10:00: ${APP_URL}\nSi no vas, podés ignorar este correo.\nDesactivar recordatorios: ${unsubscribe}`,html:`<p>Hola ${htmlEscape(profile.name)}.</p><p>Todavía no tenés una reserva para hoy (${date}). Si vas al comedor, reservá antes de las <strong>10:00</strong>.</p><p><a href="${APP_URL}">Ir al comedor y reservar</a></p><p>Si no vas, podés ignorar este correo.</p><p><a href="${unsubscribe}">Desactivar recordatorios</a>. También podés cambiarlos desde Mi perfil.</p>`};
 }
-export function reportRows(records,day){return records.filter(r=>reservationStatus(r,day)==='Confirmada').sort((a,b)=>a.name.localeCompare(b.name,'es')).map(r=>[r.name,r.condition,r.portions,r.diet,r.modalityName||'Habitual']);}
+export function reservationCreatedLabel(value){
+ const date=typeof value?.toDate==='function'?value.toDate():value instanceof Date?value:null;
+ if(!date||!Number.isFinite(date.getTime()))return 'Sin registro';
+ return new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(date);
+}
+export function reportRows(records,day){return records.filter(r=>reservationStatus(r,day)==='Confirmada').sort((a,b)=>a.name.localeCompare(b.name,'es')).map(r=>[r.name,r.condition,r.portions,r.diet,r.modalityName||'Habitual',reservationCreatedLabel(r.createdAt)]);}

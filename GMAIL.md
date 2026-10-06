@@ -81,3 +81,5 @@ GET `/api/email-test`, con la misma cabecera Authorization, envía exclusivament
 GET `/api/email-test-excel`, con la misma autorización, envía el Excel del día solo a Sebastián, también con envíos generales desactivados y clave diaria independiente. Requiere el día cargado. El archivo se puede editar en Excel o importar en Google Sheets; no sincroniza las modificaciones con la app.
 
 Para probar el Excel de mañana: `/api/email-test-excel?day=tomorrow`. Calcula mañana en Argentina, mantiene destinatario fijo y no altera el reporte diario. No acepta una fecha arbitraria.
+
+Las planillas incluyen fecha y hora original de creación de la reserva en Argentina (`createdAt`, no la última edición). Los registros sin esa fecha muestran Sin registro. La segunda versión de prueba de Excel tiene una clave independiente para comprobar esta columna sin activar los envíos generales.
