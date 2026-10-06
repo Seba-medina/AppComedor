@@ -73,3 +73,7 @@ Documentación: https://support.google.com/accounts/answer/185833 · https://sup
 Para cron-job.org gratuito: tandas de hasta 10 segundos antes de iniciar otro envío, con espera SMTP limitada a 15 segundos. El Excel se envía a un administrador por ejecución; la siguiente ejecución completa el otro. Programar llamadas cada minuto, aunque la anterior devuelva 200. Un SMTP que supera la espera queda como resultado incierto y requiere revisión; no se repite automáticamente.
 
 Recordatorios: lunes a viernes, 09:00–09:59 Argentina, dirigidos a quienes no reservaron para hoy. Excel: lunes a viernes, 10:05–10:59, reservas del día.
+
+## Prueba de entrega a Sebastián
+
+GET `/api/email-test`, con la misma cabecera Authorization, envía exclusivamente a `sebastianezequielmedina@gmail.com`. No acepta destinatarios externos y funciona con `EMAIL_JOBS_ENABLED=false`. Registra la entrega con clave diaria: una repetición no vuelve a enviar si ya fue aceptada o el resultado quedó incierto. HTTP 200 con `sent:true` indica aceptación SMTP; comprobar bandeja y spam para confirmar recepción. Después restaurar las URLs de las tareas y mantenerlas desactivadas hasta completar la activación.
