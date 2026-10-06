@@ -13,6 +13,27 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
 let weekTemplate=null;
+let profileLoaded=false;
+function renderAccess(){
+  const signed=!!user,complete=signed&&!!profile;
+  $('#welcome-screen').hidden=signed;
+  $('.topbar').hidden=!signed;
+  $('#inicio').hidden=!signed;
+  $('#app-status').hidden=!signed;
+  $('.branded-footer').hidden=!signed;
+  $('.view-nav').hidden=!complete;
+  $('.profile-toolbar').hidden=!complete;
+  $('#account-loading').hidden=!signed||profileLoaded;
+  $('#profile-form').hidden=!signed||!profileLoaded;
+  $('#student-view').hidden=!complete||!$('#admin-view').hidden;
+  if(!complete)$('#admin-view').hidden=true;
+  $('#admin-nav').hidden=!complete||!isAdmin;
+  $('#profile-title').textContent=complete?'Mi perfil':'Completá tu registro';
+  $('#profile-save').textContent=complete?'Guardar perfil':'Guardar y empezar';
+  $('#profile-intro').textContent=complete?'Guardá tus datos y preferencias para completar tus reservas.':'Revisá tu nombre y elegí tu condición y preferencias. Después podés editarlas desde Mi perfil.';
+  if(signed&&profileLoaded&&!profile){$('#profile-panel').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');}
+}
+
 let notGoingDates=new Set(),responsesReady=false,responsesLoading=false;
 async function loadDayResponses(){
  if(!user||!profile||responsesLoading)return;
@@ -52,7 +73,7 @@ const current=()=>reservations.filter(r=>r.week===week);
 const label=key=>new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(key+'T00:00:00Z'));
 function error(e,target='#app-status'){
   const messages={'permission-denied':'No se pudo acceder a esta función. Volvé a iniciar sesión; si el problema continúa, avisá al personal del comedor.','auth/unauthorized-domain':'No se pudo iniciar sesión. Avisá al personal del comedor.','auth/operation-not-allowed':'El acceso con Google no está disponible. Avisá al personal del comedor.','auth/popup-blocked':'El navegador bloqueó el acceso con Google. Permití la ventana emergente.','auth/popup-closed-by-user':'Se cerró el acceso con Google. Podés volver a intentarlo.','unavailable':'No se pudo conectar con el comedor. Revisá tu conexión e intentá nuevamente.'};
-  $(target).textContent=messages[e.code]||e.message||'No se pudo completar la operación.';
+  const message=messages[e.code]||e.message||'No se pudo completar la operación.';$(target).textContent=message;if(!user)$('#welcome-auth-status').textContent=message;
 }
 async function action(fn){
   if(busy)return;busy=true;$('#save-button').disabled=true;
@@ -155,13 +176,17 @@ function changeAdminWeek(value){
 }
 function watchMenu(){
   menuUnsub?.();
-  menuUnsub=onSnapshot(doc(db,'menus',week),snapshot=>{
+  if(!user){$('.menu-card img').hidden=true;$('.menu-card img').removeAttribute('src');return;}
+  const session=epoch;menuUnsub=onSnapshot(doc(db,'menus',week),snapshot=>{
+    if(!user||session!==epoch)return;
     $('.menu-card img').hidden=!snapshot.exists();
     if(snapshot.exists())$('.menu-card img').src=snapshot.data().image;
     $('#menu-note').textContent=snapshot.exists()?'Menú publicado por el comedor.':'El comedor todavía no publicó el menú de esta semana.';
   },e=>error(e));
 }
 function resetData(){
+  profileLoaded=false;menuUnsub?.();$('.menu-card img').hidden=true;$('.menu-card img').removeAttribute('src');
+  document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
   notGoingDates=new Set();responsesReady=false;responsesLoading=false;$('#welcome-message').hidden=true;$('#welcome-message').textContent='';$('#retry-welcome').hidden=true;$('#retry-welcome').disabled=false;
   weekTemplate=null;if($('#week-template-dialog').open)$('#week-template-dialog').close();
   adminUnsubs.forEach(fn=>fn());adminUnsubs=[];adminVersion++;adminDays={};adminReservations=[];adminReady=false;adminRecordsReady=false;monthResult=null;$('#monthly-results').replaceChildren();$('#audit-list').replaceChildren();$('#monthly-csv').disabled=true;$('#admin-menu-preview').hidden=true;$('#admin-menu-preview').removeAttribute('src');
@@ -176,7 +201,7 @@ function subscribeData(){
   const guard=fn=>snapshot=>{if(session===epoch)fn(snapshot);};
   unsubs.push(onSnapshot(doc(db,'reservationPreferences',user.uid),guard(s=>{try{weekTemplate=s.exists()?validateTemplate(s.data()):null;}catch(e){weekTemplate=null;error(e);}renderDays();}),e=>error(e)));
   unsubs.push(onSnapshot(doc(db,'users',user.uid),guard(s=>{
-    profile=s.exists()?s.data():null;
+    profile=s.exists()?s.data():null;profileLoaded=true;renderAccess();
     if(profile&&!responsesReady&&!responsesLoading)void loadDayResponses();
     if(document.activeElement?.closest('#profile-form')===null){
       $('#profile-name').value=profile?.name||user.displayName||'';$('#profile-condition').value=profile?.condition||'Alumno regular';$('#profile-diet').value=profile?.diet||'';$('#profile-reminders').checked=profile?.reminderEmails!==false;
@@ -199,14 +224,17 @@ function subscribeData(){
     unsubs.push(onSnapshot(collection(db,'userActivity'),guard(s=>{activity=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));activityReady=true;renderAdmin();}),e=>error(e)));
   }
 }
-$('#login-button').addEventListener('click',async()=>{
-  $('#login-button').disabled=true;
-  try{const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});await signInWithPopup(auth,provider);}catch(e){error(e);}finally{$('#login-button').disabled=false;}
-});
+async function enterWithGoogle(){
+  $('#login-button').disabled=true;$('#register-button').disabled=true;
+  $('#welcome-auth-status').textContent='Elegí tu cuenta de Google para continuar.';
+  try{const provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});await signInWithPopup(auth,provider);}catch(e){error(e);}finally{$('#login-button').disabled=false;$('#register-button').disabled=false;}
+}
+$('#login-button').addEventListener('click',enterWithGoogle);
+$('#register-button').addEventListener('click',enterWithGoogle);
 $('#logout-button').addEventListener('click',()=>action(()=>signOut(auth)));
 onAuthStateChanged(auth,u=>{
   epoch++;resetData();adminWeek=monday();adminDate=adminWeek;rebuildAdminControls();user=u;isAdmin=!!u?.emailVerified&&ADMIN_EMAILS.includes(u.email);
-  $('#login-button').hidden=!!u;$('#logout-button').hidden=!u;
+  $('#login-button').hidden=!!u;$('#logout-button').hidden=!u;$('#login-button').disabled=false;$('#register-button').disabled=false;$('#welcome-auth-status').textContent='';
   $('#admin-nav').hidden=!isAdmin;$('#profile-form').hidden=!u;
   if(!u){$('#profile-panel').hidden=true;$('#profile-toggle').setAttribute('aria-expanded','false');}
   $('#profile-intro').textContent=u?'Guardá tus datos y preferencias para completar tus reservas.':'Iniciá sesión con Google para completar tu perfil.';
@@ -214,6 +242,7 @@ onAuthStateChanged(auth,u=>{
   $('#admin-view').hidden=true;$('#student-view').hidden=false;
   document.querySelectorAll('.nav-button').forEach(b=>{const active=b.dataset.view==='student';b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
   $('#app-status').textContent=u?'Sesión iniciada. Cargando datos…':'Iniciá sesión para reservar.';
+  renderAccess();watchMenu();
   if(u){subscribeData();if(u.emailVerified)setDoc(doc(db,'userActivity',u.uid),{lastSeen:serverTimestamp()}).catch(()=>console.warn('No se pudo registrar el acceso. Revisá las reglas de Firestore.'));}renderDays();
 });
 $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
@@ -330,11 +359,11 @@ $('#menu-upload').addEventListener('change',e=>{const targetWeek=adminWeek,file=
   await adminSet(doc(db,'menus',targetWeek),{image,updatedAt:serverTimestamp()},'Publicar menú',targetWeek);$('#app-status').textContent='Menú publicado para la semana seleccionada.';e.target.value='';
 });});
 document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',()=>{
-  const admin=b.dataset.view==='admin';if(admin&&!isAdmin)return;$('#admin-view').hidden=!admin;$('#student-view').hidden=admin;document.querySelectorAll('.nav-button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderAdmin();
+  const admin=b.dataset.view==='admin';if(!user||!profile||(admin&&!isAdmin))return;$('#admin-view').hidden=!admin;$('#student-view').hidden=admin;document.querySelectorAll('.nav-button').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});renderAdmin();
 }));
 $('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
 $('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!adminReady||!adminRecordsReady)return;downloadPdf(dailyTableReport(adminDate,adminReservations,adminDays[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
-$('#profile-toggle').addEventListener('click',()=>{const open=$('#profile-panel').hidden;$('#profile-panel').hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});
+$('#profile-toggle').addEventListener('click',()=>{if(!user||!profile)return;const open=$('#profile-panel').hidden;$('#profile-panel').hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.

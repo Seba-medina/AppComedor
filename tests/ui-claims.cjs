@@ -12,7 +12,7 @@ const {JSDOM}=deps('jsdom');
  const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
  const document=dom.window.document,records=new Map([['adminRoles/admin',{admin:true}],['adminRoles/admin2',{admin:true}]]),listeners=[],writes=[];
- let authCallback; const choices=new Map(),welcomeRequests=[];
+ let authCallback,loginRequests=0,loginFailure=null; const choices=new Map(),welcomeRequests=[];
  const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate());
  const week=next.toISOString().slice(0,10);
  let autoId=0;const ref=(...args)=>args.length===1&&args[0]?.path?{path:args[0].path+'/auto'+(++autoId)}:{path:args.filter(x=>typeof x==='string').join('/')};
@@ -25,7 +25,7 @@ const {JSDOM}=deps('jsdom');
  const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,...backupTools,...management,...templateTools,applyWeekTemplate:(...args)=>templateTools.applyWeekTemplate(...args,new Date(week+'T09:00:00-03:00')),RECAPTCHA_ENTERPRISE_SITE_KEY:"",downloadBackup:b=>{capturedBackup=b;},validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
   studentRequest:async(account,path,body)=>{if(path==='/api/welcome'){welcomeRequests.push(account.uid);return {state:'sent'};}const dates=new Set(choices.get(account.uid)||[]);if(body){if(body.choice==='notGoing'){dates.add(body.date);if(body.confirmCancel)for(const [path,r]of records)if(path.startsWith('reservations/')&&r.uid===account.uid&&r.dateKey===body.date)records.set(path,{...r,cancelled:true});notify();}else dates.delete(body.date);choices.set(account.uid,[...dates]);}return {week,notGoingDates:[...dates],cancelled:body?.confirmCancel?2:0};},
   auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
-  signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onIdTokenChanged:(a,cb)=>{authCallback=cb;cb(null);},getIdTokenResult:async u=>({claims:{admin:['admin','admin2'].includes(u.uid)},signInProvider:'google.com'}),
+  signInWithPopup:async()=>{loginRequests++;if(loginFailure)throw loginFailure;},signOut:async()=>authCallback(null),onIdTokenChanged:(a,cb)=>{authCallback=cb;cb(null);},getIdTokenResult:async u=>({claims:{admin:['admin','admin2'].includes(u.uid)},signInProvider:'google.com'}),
   doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,...constraints)=>({...r,constraints}),where:(field,op,value)=>({field,op,value}),orderBy:()=>({}),limit:()=>({}),
   onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
   getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),getDocsFromServer:async r=>{if(failBackupRead)throw new Error("Sin conexión");return snapshot(r);},setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
@@ -40,11 +40,27 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelector('#first-use-action').textContent,'Ingresar con Google');
  assert.equal(document.querySelector('#week-input'),null);
  assert.equal(document.querySelector('#profile-panel').hidden,true);
- document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,false);
+ document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,true);
  document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,true);
  assert.equal(document.querySelector('.sidebar').firstElementChild.className,'menu-card');
+ assert.equal(document.querySelector('#welcome-screen').hidden,false);
+ assert.equal(document.querySelector('#inicio').hidden,true);
+ assert.equal(document.querySelector('.topbar').hidden,true);
+ assert.equal(document.querySelector('.branded-footer').hidden,true);
+ assert.equal(listeners.some(x=>x.active&&x.ref.path.startsWith('menus/')),false);
+ document.querySelector('#register-button').click();assert.equal(document.querySelector('#login-button').disabled,true);await new Promise(r=>setImmediate(r));assert.equal(loginRequests,1);
+ loginFailure={code:'auth/popup-closed-by-user'};document.querySelector('#login-button').click();await new Promise(r=>setImmediate(r));assert.match(document.querySelector('#welcome-auth-status').textContent,/Se cerró/);assert.equal(document.querySelector('#register-button').disabled,false);loginFailure=null;
+
  await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#first-use-action').textContent,'Completar mi perfil');
+ assert.equal(document.querySelector('#welcome-screen').hidden,true);
+ assert.equal(document.querySelector('#inicio').hidden,false);
+ assert.equal(document.querySelector('#profile-panel').hidden,false);
+ assert.equal(document.querySelector('#profile-name').value,'Alumno');
+ assert.equal(document.querySelector('#profile-save').textContent,'Guardar y empezar');
+ assert.equal(document.querySelector('#student-view').hidden,true);
+ assert.equal(document.querySelector('.profile-toolbar').hidden,true);
+
  records.set('users/student',{name:'Alumno',condition:'Alumno regular',diet:'Sin TACC',email:'student@example.com'});
  for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});notify();
  await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});await new Promise(r=>setImmediate(r));
@@ -82,6 +98,8 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelectorAll('[data-cancel-own]').length,1);
  assert.match(document.querySelector('#my-history').textContent,/Cancelada/);
  records.set('days/'+week,{week,blocked:true,generation:1});notify();
+ records.set('users/admin',{name:'Admin',condition:'Personal',diet:'',email:domain.ADMIN_EMAIL||ADMIN_EMAIL});
+ records.set('users/admin2',{name:'Laura',condition:'Personal',diet:'',email:'marchesemarialaura@gmail.com'});
  assert.match(document.querySelector('#my-history').textContent,/Cancelada por bloqueo/);
  await authCallback({uid:'admin',email:ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#admin-nav').hidden,false);
@@ -168,7 +186,7 @@ const {JSDOM}=deps('jsdom');
  // No voy is saved immediately, survives login, suppresses template selection and can be removed.
  await authCallback({uid:'choice-student',email:'choice@example.com',emailVerified:true});await new Promise(r=>setImmediate(r));
  document.querySelector('#profile-name').value='Usuario decisiones';document.querySelector('#profile-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
- assert(welcomeRequests.includes('choice-student'));assert.match(document.querySelector('#welcome-message').textContent,/Bienvenida enviada/);
+ assert.equal(document.querySelector('#student-view').hidden,false);assert.equal(document.querySelector('.profile-toolbar').hidden,false);assert(welcomeRequests.includes('choice-student'));assert.match(document.querySelector('#welcome-message').textContent,/Bienvenida enviada/);
  const choiceDate=domain.weekDays(week)[1];
  document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('[data-day="'+choiceDate+'"]').disabled,true);assert.equal(document.querySelector('[data-no-going="'+choiceDate+'"]').getAttribute('aria-pressed'),'true');
@@ -178,5 +196,10 @@ const {JSDOM}=deps('jsdom');
  document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('[data-day="'+choiceDate+'"]').disabled,false);assert.deepEqual(choices.get('choice-student'),[]);
  document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));
  await authCallback(null);await new Promise(r=>setImmediate(r));await authCallback({uid:'choice-student',email:'choice@example.com',emailVerified:true});await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('[data-no-going="'+choiceDate+'"]').getAttribute('aria-pressed'),'true');
+
+ await authCallback(null);await new Promise(r=>setImmediate(r));
+ assert.equal(document.querySelector('#welcome-screen').hidden,false);assert.equal(document.querySelector('#inicio').hidden,true);assert.equal(document.querySelector('.topbar').hidden,true);
+ assert.equal(document.querySelector('#profile-name').value,'');assert.equal(document.querySelector('.menu-card img').hasAttribute('src'),false);
+ assert.equal(listeners.some(x=>x.active&&x.ref.path.startsWith('menus/')),false);
  console.log('OK: UI sin sesión, rol alumno/admin, preferencias, ambos turnos, guardado y cancelación actualizada con SDK simulado.');
 })().catch(e=>{console.error(e);process.exitCode=1});

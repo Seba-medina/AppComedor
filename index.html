@@ -13,19 +13,35 @@
   <script type="module" src="tutorial.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar" hidden>
     <a class="brand" href="#inicio" aria-label="El Comedor de la UNER, inicio"><img class="brand-logo" src="assets/logo-comedor.jpg" alt="" width="60" height="60"><span><strong>El Comedor</strong><small>DE LA UNER</small></span></a>
     <nav class="view-nav" aria-label="Navegación">
       <button class="nav-button active" data-view="student" aria-pressed="true">Mi reserva</button>
       <button id="admin-nav" hidden class="nav-button" data-view="admin" aria-pressed="false">Panel del comedor</button>
     </nav>
-    <div class="user-chip">Sin sesión</div><div class="auth-actions"><button id="login-button">Ingresar con Google</button><button id="logout-button" hidden>Salir</button></div>
+    <div class="user-chip">Sin sesión</div><div class="auth-actions"><button id="logout-button" hidden>Salir</button></div>
   </header>
 
-  <div id="app-status" class="demo-strip" role="status" aria-live="polite">Conectando con el comedor…</div>
+  <section id="welcome-screen" class="welcome-screen" aria-labelledby="welcome-title">
+    <div class="welcome-card">
+      <img class="welcome-logo" src="assets/logo-comedor.jpg" alt="El Comedor de la UNER" width="120" height="120">
+      <p class="eyebrow">COMEDOR · UNER</p>
+      <h1 id="welcome-title">Tu lugar en<br>el comedor.</h1>
+      <p class="welcome-copy">Ingresá para consultar el menú y organizar tus comidas de la semana.</p>
+      <div class="welcome-actions">
+        <button id="register-button" type="button" class="primary-button" disabled>Registrarme con Google</button>
+        <button id="login-button" type="button" class="welcome-login" disabled>Ya tengo cuenta · Ingresar</button>
+      </div>
+      <p id="welcome-auth-status" class="welcome-auth-status" role="status">Comprobando tu sesión…</p>
+      <p class="welcome-note">La primera vez te vamos a pedir tus datos y preferencias.</p>
+      <a class="welcome-privacy" href="privacidad.html">Privacidad</a>
+      <noscript><p>Activá JavaScript en tu navegador para ingresar.</p></noscript>
+    </div>
+  </section>
+  <div id="app-status" hidden class="demo-strip" role="status" aria-live="polite">Conectando con el comedor…</div>
 
-  <main id="inicio"><div class="profile-toolbar"><span>Esta semana</span><div class="profile-actions"><button id="tutorial-button" type="button">Tutorial</button><button id="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-panel">Mi perfil</button></div></div>          <section id="profile-panel" class="card settings-card profile-panel" hidden aria-labelledby="profile-title"><h2 id="profile-title">Mi perfil</h2><p id="profile-intro">Iniciá sesión para completar tus datos.</p><form id="profile-form" hidden><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><label class="notification-choice"><input id="profile-reminders" type="checkbox" checked> Recibir recordatorios por correo cuando no haya reservado</label><p class="fine-print">Podés desactivarlos cuando quieras. Se envían de lunes a viernes a partir de las 9:00 para reservar la comida del día, antes de las 10:00.</p><button class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p><p id="welcome-message" role="status" hidden></p><button id="retry-welcome" type="button" hidden>Reintentar correo de bienvenida</button></form></section>
-    <section id="student-view" class="view" aria-labelledby="student-title">
+  <main id="inicio" hidden><p id="account-loading" class="account-loading" role="status" hidden>Cargando tu perfil…</p><div class="profile-toolbar"><span>Esta semana</span><div class="profile-actions"><button id="tutorial-button" type="button">Tutorial</button><button id="profile-toggle" type="button" aria-expanded="false" aria-controls="profile-panel">Mi perfil</button></div></div>          <section id="profile-panel" class="card settings-card profile-panel" hidden aria-labelledby="profile-title"><h2 id="profile-title">Mi perfil</h2><p id="profile-intro">Iniciá sesión para completar tus datos.</p><form id="profile-form" hidden><label>Nombre y apellido<input id="profile-name" maxlength="80" required></label><label>Condición habitual<select id="profile-condition"><option>Alumno regular</option><option>Becario</option><option>Personal</option></select></label><label>Preferencias alimentarias<input id="profile-diet" maxlength="100" placeholder="Ej. Sin TACC"></label><label class="notification-choice"><input id="profile-reminders" type="checkbox" checked> Recibir recordatorios por correo cuando no haya reservado</label><p class="fine-print">Podés desactivarlos cuando quieras. Se envían de lunes a viernes a partir de las 9:00 para reservar la comida del día, antes de las 10:00.</p><button id="profile-save" class="primary-button">Guardar perfil</button><p id="profile-message" role="status"></p><p id="welcome-message" role="status" hidden></p><button id="retry-welcome" type="button" hidden>Reintentar correo de bienvenida</button></form></section>
+    <section id="student-view" hidden class="view" aria-labelledby="student-title">
       <div class="page-heading"><div><p id="week-caption" class="eyebrow"></p><h1 id="student-title">Armá tu semana<span class="spark">✳</span></h1><p>Consultá el menú, marcá los días y elegí cuándo retirás tu comida.</p></div><div class="deadline">◷ &nbsp; Podés reservar hasta las 10:00 de cada día</div></div>
       <section id="first-use" class="first-use" aria-labelledby="first-use-title"><div><p class="eyebrow">TU PRIMERA RESERVA</p><h2 id="first-use-title">Empezá en tres pasos</h2><ol class="first-use-steps"><li data-setup="login">1. Ingresar</li><li data-setup="profile">2. Guardar perfil</li><li data-setup="reserve">3. Elegir y confirmar</li></ol><p id="first-use-message"></p></div><button id="first-use-action" type="button" class="primary-button">Ingresar con Google</button></section><div id="pending-reservation" class="pending-reservation" hidden role="status">Tenés cambios sin guardar. Revisá los horarios y tocá el botón de guardar.</div><div class="student-layout">
         <section class="card reservation-card" aria-labelledby="days-title">
@@ -56,7 +72,7 @@
 
     </section>
   </main>
-  <footer class="branded-footer"><img src="assets/logo-comedor.jpg" alt="" width="44" height="44" loading="lazy"><div><strong>El Comedor de la UNER</strong><small>Reservas y menú de la semana</small><a href="privacidad.html">Privacidad y contacto</a></div></footer>
+  <footer class="branded-footer" hidden><img src="assets/logo-comedor.jpg" alt="" width="44" height="44" loading="lazy"><div><strong>El Comedor de la UNER</strong><small>Reservas y menú de la semana</small><a href="privacidad.html">Privacidad y contacto</a></div></footer>
 <dialog id="week-template-dialog" aria-labelledby="template-title"><form id="week-template-form"><h2 id="template-title">Configurar mi semana</h2><p>Elegí los turnos y las porciones de cada día. Podés combinar 1 al mediodía y 1 a la noche, o pedir hasta 2 en un solo turno.</p><p>Destildá los días que no vas. Máximo: 2 porciones por día.</p><div id="template-days"></div><p>Las preferencias alimentarias se toman de tu perfil. Las reservas existentes conservan sus restricciones y modalidad.</p><p id="template-message" role="alert"></p><div class="template-actions"><button id="close-template" type="button">Cerrar</button><button type="submit" class="primary-button">Guardar configuración</button></div></form></dialog></body>
 </html>
 

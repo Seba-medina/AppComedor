@@ -48,3 +48,16 @@
 .tutorial-week-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.tutorial-week-fields label:last-child{grid-column:auto}
 
 .day-intent{font-size:12px;padding:7px 10px;border:1px solid #a7b9ac;border-radius:9px;background:#fffdf7;color:#294b37;white-space:normal}.day-intent[aria-pressed="true"]{background:#e4efe5;border-color:#759b7e;font-weight:700}.day-row.is-not-going{background:#f0f5ed;border-color:#9cb6a0}.day-response-note{font-size:13px;color:#526856;line-height:1.5}.day-intent:disabled{opacity:.5;cursor:default}#welcome-message{font-size:13px;line-height:1.5}
+
+.welcome-screen{min-height:100svh;display:grid;place-items:center;padding:32px 20px;background:radial-gradient(ellipse at 10% 0%,#e6efd9 0,transparent 48%),radial-gradient(ellipse at 100% 90%,#ffe2b3 0,transparent 42%),#f9f2e6}
+.welcome-card{width:min(100%,460px);text-align:center;padding:38px 32px;background:#fffdf8;border:1px solid #e3decc;border-radius:28px;box-shadow:0 18px 60px #173c2610}
+.welcome-logo{width:106px;height:106px;object-fit:contain;border-radius:50%;margin-bottom:22px}
+.welcome-card .eyebrow{font-size:11px;letter-spacing:.18em;margin-bottom:14px}
+.welcome-card h1{font-size:clamp(34px,8vw,46px);line-height:1.08;margin-bottom:18px}
+.welcome-copy{color:#5c7063;font-size:16px;max-width:320px;margin:0 auto 28px}
+.welcome-actions{display:grid;gap:12px}.welcome-actions button{width:100%;min-height:50px;border-radius:12px;font-size:15px}
+.welcome-login{background:transparent;border:1px solid #b8c8bb;color:#154a31;font-weight:700;padding:12px 16px}
+.welcome-auth-status{font-size:13px;color:#855116;margin:16px 0 0;line-height:1.5}.welcome-auth-status:empty{display:none}
+.welcome-note{font-size:12px;line-height:1.5;color:#68796c;margin:24px 0 12px}.welcome-privacy{font-size:12px;color:#43634c;text-underline-offset:3px}
+.account-loading{text-align:center;padding:32px;color:#526856}
+@media(max-width:480px){.welcome-screen{padding:20px 16px}.welcome-card{padding:28px 22px;border-radius:22px}.welcome-logo{width:88px;height:88px}}
