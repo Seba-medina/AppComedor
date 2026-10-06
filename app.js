@@ -6,11 +6,11 @@ import {dailyTableReport,downloadPdf} from './daily-pdf.mjs';
 import {auth,db} from './firebase.js';
 import {GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {collection,doc,query,where,orderBy,limit,onSnapshot,getDoc,getDocs,getDocsFromServer,setDoc,deleteDoc,writeBatch,runTransaction,serverTimestamp,Timestamp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,argentinaToday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
+import {ADMIN_EMAILS,SHIFTS,shiftLabel,monday,reservationWeek,argentinaToday,weekDays,deadline,reservationId,reservationStatus,validateSelections} from './domain.mjs';
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
+let user=null,isAdmin=false,profile=null,week=reservationWeek(),days={},reservations=[],modalities=[],users=[];
 let weekTemplate=null;
 let adminWeek=week,adminDays={},adminReservations=[],adminUnsubs=[],adminVersion=0,adminReady=false,adminRecordsReady=false,monthResult=null;
 let adminDate=week,attendance=[],activity={},attendanceReady=false,activityReady=false;
@@ -292,7 +292,7 @@ $('#profile-toggle').addEventListener('click',()=>{const open=$('#profile-panel'
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.
-setInterval(()=>{const nowWeek=monday();if(nowWeek!==week){if(adminWeek===week){adminWeek=nowWeek;adminDate=nowWeek;}week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
+setInterval(()=>{const nowWeek=reservationWeek();if(nowWeek!==week){if(adminWeek===week){adminWeek=nowWeek;adminDate=nowWeek;}week=nowWeek;epoch++;resetData();rebuildWeekControls();watchMenu();if(user)subscribeData();renderAdmin();}if(!document.activeElement?.closest('#day-list'))renderDays();},30000);
 
 $('#download-backup').addEventListener('click',()=>{if(!isAdmin||busy)return;action(async()=>{
   const button=$('#download-backup'),message=$('#backup-message');button.disabled=true;message.textContent='Preparando copia de todas las semanas…';
