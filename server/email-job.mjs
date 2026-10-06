@@ -64,9 +64,9 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
      if(sent?.state==='sent'){counts.skipped++;}
      else {
       // Check opt-out, recent reservations, blocking and deletion before each send.
-      const [fresh,current,latestDay,deleting]=await Promise.all([doc.ref.get(),db.collection('reservations').where('uid','==',doc.id).get(),dayDoc.ref.get(),db.collection('accountDeletionLocks').doc(doc.id).get()]);
+      const [fresh,current,latestDay,deleting,response]=await Promise.all([doc.ref.get(),db.collection('reservations').where('uid','==',doc.id).get(),dayDoc.ref.get(),db.collection('accountDeletionLocks').doc(doc.id).get(),db.collection('dayResponses').doc(doc.id).get()]);
       const profile=fresh.data(),todays=current.docs.map(d=>d.data()).filter(r=>r.dateKey===timing.date);
-      if(!profile||deleting.exists||!profile.email||!wantsReminder(profile,todays,latestDay.data(),timing.date))counts.skipped++;
+      if(!profile||deleting.exists||!profile.email||!wantsReminder(profile,todays,latestDay.data(),timing.date,response.data()))counts.skipped++;
       else {
        if(!localSchedule(kind,now()).allowed)return res.status(200).json({closed:true,...counts});
        const mail=reminderMail(doc.id,profile,timing.date,process.env.UNSUBSCRIBE_SECRET);

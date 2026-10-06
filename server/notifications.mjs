@@ -9,8 +9,8 @@ export function localSchedule(kind,now=new Date()){
 }
 export const ADMIN_REMINDER_TEST_DATE='2026-10-06';
 export const adminReminderTrial=(profile,date)=>date===ADMIN_REMINDER_TEST_DATE&&ADMIN_EMAILS.includes(profile.email);
-export function wantsReminder(profile,records,day,date=null){
- if(!day||day.blocked||profile.reminderEmails===false)return false;
+export function wantsReminder(profile,records,day,date=null,response=null){
+ if(!day||day.blocked||profile.reminderEmails===false||response?.notGoingDates?.includes(date))return false;
  if(ADMIN_EMAILS.includes(profile.email))return adminReminderTrial(profile,date);
  return !records.some(r=>r.generation===day.generation&&(r.cancelled===true||reservationStatus(r,day)==='Confirmada'));
 }
@@ -23,6 +23,24 @@ export function tokenUid(token,secret){
  return a.length===b.length&&timingSafeEqual(a,b)?uid:null;
 }
 export const htmlEscape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function welcomeMail(profile){
+ const text=`Hola ${profile.name}.
+
+¡Bienvenido/a al Comedor UNER! Tu perfil ya está guardado.
+
+Consultá el menú, elegí los días y horarios de retiro y confirmá tus reservas antes de las 10:00 (hora de Argentina). Podés pedir hasta 2 porciones por día, entre mediodía y noche.
+
+Si un día no vas, marcá No voy este día en la app para evitar el recordatorio de esa fecha. En Mi perfil podés desactivar todos los recordatorios. El botón Tutorial explica cómo usar la página.
+
+Abrir el comedor: ${APP_URL}
+
+Para recibir nuestros avisos, revisá también la carpeta Spam. Si encontrás este correo allí, elegí No es spam y agregá comedorunerfcal@gmail.com a tus contactos. Si aparece en otra pestaña, podés moverlo a Principal. La ubicación de los próximos correos depende de Gmail.
+
+Si necesitás ayuda, contactá al personal del comedor.
+
+Comedor UNER`;
+ return {to:[profile.email],subject:'Bienvenido/a al Comedor UNER',text,html:text.split('\n\n').map(p=>'<p>'+htmlEscape(p).replace(/\n/g,'<br>')+'</p>').join('')};
+}
 export function reminderMail(uid,profile,date,secret){
  const unsubscribe=APP_URL+'/api/unsubscribe?token='+encodeURIComponent(reminderToken(uid,secret));
  return {to:[profile.email],headers:{'List-Unsubscribe':'<'+unsubscribe+'>'},subject:'Recordatorio de reserva · Comedor UNER',text:`Hola ${profile.name}. Todavía no registraste tu reserva para hoy (${date}). Si vas al comedor, reservá antes de las 10:00 (hora de Argentina): ${APP_URL}\nSi hoy no vas al comedor, podés ignorar este mensaje.\nPodés desactivar estos recordatorios desde Mi perfil o en este enlace: ${unsubscribe}`,html:`<p>Hola ${htmlEscape(profile.name)}.</p><p>Todavía no registraste tu reserva para hoy (${date}). Si vas al comedor, reservá antes de las <strong>10:00 (hora de Argentina)</strong>.</p><p><a href="${APP_URL}">Reservar mi comida</a></p><p>Si hoy no vas al comedor, podés ignorar este mensaje.</p><p><a href="${unsubscribe}">Desactivar recordatorios</a>. También podés desactivarlos desde Mi perfil.</p>`};

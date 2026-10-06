@@ -44,7 +44,7 @@ const assert=require('node:assert/strict');
   await assertFails(rawSetDoc(doc(student,'users','student'),{...profile,reminderEmails:'false'}));
   await assertFails(rawSetDoc(doc(other,'users','student'),{...profile,reminderEmails:false}));
   await assertSucceeds(rawSetDoc(doc(student,'users','student'),profile));
-  for(const name of ['emailDeliveries','emailJobProgress','emailJobLocks']){
+  for(const name of ['emailDeliveries','emailJobProgress','emailJobLocks','dayResponses','emailRateLimits','emailWelcomeRequests']){
    await assertFails(rawSetDoc(doc(student,name,'fake'),{state:'sent'}));
    await assertFails(getDocs(collection(student,name)));
    await assertFails(rawSetDoc(doc(admin,name,'fake'),{state:'sent'}));

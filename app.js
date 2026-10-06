@@ -1,4 +1,5 @@
 import {validateTemplate,applyWeekTemplate} from './week-template.mjs';
+import {studentRequest} from './student-api.mjs';
 import {RECAPTCHA_ENTERPRISE_SITE_KEY} from './app-check-config.js';
 import {filterUsers,shiftWeek,monthBounds,monthlyReport,reportCsv} from './management.mjs';
 import {BACKUP_COLLECTIONS,buildBackup,downloadBackup} from './backup.mjs';
@@ -12,6 +13,30 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let user=null,isAdmin=false,profile=null,week=monday(),days={},reservations=[],modalities=[],users=[];
 let weekTemplate=null;
+let notGoingDates=new Set(),responsesReady=false,responsesLoading=false;
+async function loadDayResponses(){
+ if(!user||!profile||responsesLoading)return;
+ const session=epoch,account=user;responsesLoading=true;
+ try{
+  const result=await studentRequest(account,'/api/day-response');
+  if(session!==epoch)return;
+  notGoingDates=new Set(result.week===week?result.notGoingDates:[]);
+  for(const date of notGoingDates){selected.delete(date);dirty.delete(date);}
+ }catch(e){if(session===epoch)error(e);}
+ finally{if(session===epoch){responsesLoading=false;responsesReady=true;hydrate();renderDays();}}
+}
+async function requestWelcome(){
+ if(!user)return;
+ const session=epoch,account=user,button=$('#retry-welcome'),message=$('#welcome-message');
+ button.disabled=true;message.hidden=false;message.textContent='Estamos enviando tu correo de bienvenida…';
+ try{
+  const result=await studentRequest(account,'/api/welcome',{});
+  if(session!==epoch)return;
+  message.textContent=result.state==='sent'?'Bienvenida enviada. Revisá tu correo y Spam; si está allí, marcá No es spam y agregá al comedor a tus contactos.':result.state==='uncertain'?'No pudimos confirmar la entrega de la bienvenida. Revisá tu correo y Spam; evitamos reenviarla para no duplicarla.':'La bienvenida ya está en proceso. Revisá tu correo y Spam.';
+  button.hidden=true;
+ }catch(e){if(session===epoch){message.textContent=e.message+' Tu perfil quedó guardado.';button.hidden=false;}}
+ finally{if(session===epoch)button.disabled=false;}
+}
 let adminWeek=week,adminDays={},adminReservations=[],adminUnsubs=[],adminVersion=0,adminReady=false,adminRecordsReady=false,monthResult=null;
 let adminDate=week,attendance=[],activity={},attendanceReady=false,activityReady=false;
 const lastAccess=uid=>{const value=activity[uid]?.lastSeen;if(!activityReady)return 'Cargando…';if(!value?.toDate)return 'Sin registro';return new Intl.DateTimeFormat('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'}).format(value.toDate());};
@@ -36,6 +61,7 @@ async function action(fn){
 function hydrate(){
   for(const date of dates()){
     if(dirty.has(date))continue;
+    if(notGoingDates.has(date)){selected.delete(date);continue;}
     const records=current().filter(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r));
     if(records.length)selected.set(date,Object.fromEntries(records.map(r=>[r.shift,{...r}])));
     else selected.delete(date);
@@ -61,7 +87,7 @@ $('#first-use-action').addEventListener('click',()=>{
 function renderDays(){
   renderFirstUse();
 
-  const ready=user&&profile&&dataReady&&reservationsReady;
+  const ready=user&&profile&&dataReady&&reservationsReady&&responsesReady;
   $('#configure-template').disabled=!user||!profile||busy;
   $('#apply-template').disabled=!ready||!weekTemplate||busy;
   $('#template-summary').textContent=weekTemplate?Object.entries(weekTemplate.schedule).map(([i,d])=>['Lun','Mar','Mié','Jue','Vie'][i]+': '+[d.mediodia?d.mediodia+' al mediodía':'',d.noche?d.noche+' a la noche':''].filter(Boolean).join(' y ')).join(' · '):'Configurá tus días y porciones habituales para reservar más rápido.';
@@ -69,13 +95,13 @@ function renderDays(){
   $('#save-button').disabled=!ready||busy;
   $('#save-button').textContent=current().some(r=>r.uid===user?.uid&&isActive(r))?'Guardar cambios de mi reserva':'Guardar reserva semanal';
   $('#day-list').innerHTML=dates().map(date=>{
-    const day=days[date],closed=Date.now()>=deadline(date),disabled=!ready||!day||day.blocked||closed,picked=selected.get(date);
+    const day=days[date],closed=Date.now()>=deadline(date),notGoing=notGoingDates.has(date),disabled=!ready||!day||day.blocked||closed||notGoing,picked=notGoing?null:selected.get(date);
     const total=picked?Object.values(picked).reduce((n,r)=>n+r.portions,0):0;
-    const explanation=!user?'Iniciá sesión':!dataReady?'Cargando':!day?'Semana sin habilitar':day.blocked?'Día bloqueado':closed?'Plazo cerrado':!profile?'Completá tu perfil':picked?(total>2?'Supera el máximo: reducí a 2 porciones':total?total+' / 2 porciones':'Elegí un horario'):'Tocá para elegir';
+    const explanation=!user?'Iniciá sesión':!dataReady?'Cargando':!day?'Semana sin habilitar':day.blocked?'Día bloqueado':notGoing?'No vas · sin aviso de las 9':closed?'Plazo cerrado':!profile?'Completá tu perfil':!responsesReady?'Cargando tus días':picked?(total>2?'Supera el máximo: reducí a 2 porciones':total?total+' / 2 porciones':'Elegí un horario'):'Tocá para elegir';
     const reserved=current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r));
     const collapsed=reserved&&collapsedDays.has(date)&&!dirty.has(date);
     const options=modalities.filter(c=>c.active&&c.dates.includes(date));
-    return '<div class="day-row '+(disabled?'blocked':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span>'+(reserved?'<button type="button" class="day-collapse" data-toggle-day="'+date+'" aria-expanded="'+!collapsed+'" aria-controls="details-'+date+'">'+(collapsed?'Ver detalles':'Minimizar')+'</button>':'')+'</div>'+(picked?'<div id="details-'+date+'" '+(collapsed?'hidden':'')+'><p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
+    return '<div class="day-row '+(disabled&&!notGoing?'blocked':'')+(notGoing?' is-not-going':'')+(picked?' selected':'')+(total>2?' exceeds-limit':'')+'"><div class="day-top"><label><input type="checkbox" data-day="'+date+'" '+(picked?'checked ':'')+(disabled?'disabled':'')+'><span class="day-name">'+esc(label(date))+'</span></label><span>'+esc(explanation)+'</span><button type="button" class="day-intent" data-no-going="'+date+'" '+(!ready||!day||day.blocked||closed||busy?'disabled ':'')+'aria-pressed="'+notGoing+'">'+(notGoing?'Volver a elegir':'No voy este día')+'</button>'+(reserved?'<button type="button" class="day-collapse" data-toggle-day="'+date+'" aria-expanded="'+!collapsed+'" aria-controls="details-'+date+'">'+(collapsed?'Ver detalles':'Minimizar')+'</button>':'')+'</div>'+(picked?'<div id="details-'+date+'" '+(collapsed?'hidden':'')+'><p>'+ (current().some(r=>r.uid===user?.uid&&r.dateKey===date&&isActive(r))?'Editá tu reserva':'Elegí los horarios')+' · Máximo 2 porciones por día.</p>'+SHIFTS.map(shift=>{
       const r=picked[shift];
       return '<div class="turn-card"><label><input type="checkbox" data-date="'+date+'" data-shift="'+shift+'" '+(r?'checked ':'')+(disabled?'disabled':'')+'> '+shiftLabel(shift)+'</label>'+(r?'<div class="day-details"><div class="field"><label>Porciones<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="portions" '+(disabled?'disabled':'')+'>'+[1,2].map(n=>'<option '+(r.portions===n?'selected':'')+'>'+n+'</option>').join('')+'</select></label></div><div class="field"><label>Restricciones<input maxlength="100" data-date="'+date+'" data-shift-field="'+shift+'" data-field="diet" value="'+esc(r.diet)+'" '+(disabled?'disabled':'')+'></label></div><div class="field"><label>Modalidad especial<select data-date="'+date+'" data-shift-field="'+shift+'" data-field="modalityId" '+(disabled?'disabled':'')+'>'+(r.modalityId&&!options.some(c=>c.id===r.modalityId)?'<option selected disabled>Modalidad no disponible: elegí otra</option>':'')+'<option value="">Condición habitual</option>'+options.map(c=>'<option value="'+esc(c.id)+'" '+(r.modalityId===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label></div></div>':'')+'</div>';
     }).join('')+'</div>':'')+'</div>';
@@ -136,6 +162,7 @@ function watchMenu(){
   },e=>error(e));
 }
 function resetData(){
+  notGoingDates=new Set();responsesReady=false;responsesLoading=false;$('#welcome-message').hidden=true;$('#welcome-message').textContent='';$('#retry-welcome').hidden=true;$('#retry-welcome').disabled=false;
   weekTemplate=null;if($('#week-template-dialog').open)$('#week-template-dialog').close();
   adminUnsubs.forEach(fn=>fn());adminUnsubs=[];adminVersion++;adminDays={};adminReservations=[];adminReady=false;adminRecordsReady=false;monthResult=null;$('#monthly-results').replaceChildren();$('#audit-list').replaceChildren();$('#monthly-csv').disabled=true;$('#admin-menu-preview').hidden=true;$('#admin-menu-preview').removeAttribute('src');
   for(const selector of ['#users-list','#admin-results','#my-history','#condition-list','#block-controls','#admin-days'])$(selector).replaceChildren();
@@ -150,6 +177,7 @@ function subscribeData(){
   unsubs.push(onSnapshot(doc(db,'reservationPreferences',user.uid),guard(s=>{try{weekTemplate=s.exists()?validateTemplate(s.data()):null;}catch(e){weekTemplate=null;error(e);}renderDays();}),e=>error(e)));
   unsubs.push(onSnapshot(doc(db,'users',user.uid),guard(s=>{
     profile=s.exists()?s.data():null;
+    if(profile&&!responsesReady&&!responsesLoading)void loadDayResponses();
     if(document.activeElement?.closest('#profile-form')===null){
       $('#profile-name').value=profile?.name||user.displayName||'';$('#profile-condition').value=profile?.condition||'Alumno regular';$('#profile-diet').value=profile?.diet||'';$('#profile-reminders').checked=profile?.reminderEmails!==false;
     }
@@ -190,11 +218,27 @@ onAuthStateChanged(auth,u=>{
 });
 $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async()=>{
   if(!user)throw new Error('Iniciá sesión.');
+  const newProfile=!profile,session=epoch;
   const name=$('#profile-name').value.trim();if(!name)throw new Error('Ingresá tu nombre y apellido.');
   await setDoc(doc(db,'users',user.uid),{name,condition:$('#profile-condition').value,diet:$('#profile-diet').value.trim(),email:user.email,reminderEmails:$('#profile-reminders').checked,updatedAt:serverTimestamp()});
   $('#profile-message').textContent='Perfil guardado. Las nuevas selecciones usarán estas preferencias.';$('#app-status').textContent='Perfil actualizado.';
+  if(newProfile&&session===epoch)void requestWelcome();
 });});
+$('#retry-welcome').addEventListener('click',()=>{if(!$('#retry-welcome').disabled)void requestWelcome();});
 $('#day-list').addEventListener('click',e=>{
+  const intent=e.target.closest('[data-no-going]');
+  if(intent){
+    if(!user||!profile||busy||intent.disabled)return;
+    const date=intent.dataset.noGoing,clear=notGoingDates.has(date),reserved=current().some(r=>r.uid===user.uid&&r.dateKey===date&&isActive(r));
+    if(!clear&&reserved&&!confirm('¿Marcar que no vas el '+label(date)+'? Se cancelarán tus reservas de AMBOS turnos. Para recuperar un turno cancelado deberás contactar al comedor.'))return;
+    action(async()=>{
+      const session=epoch,result=await studentRequest(user,'/api/day-response',{date,choice:clear?'clear':'notGoing',confirmCancel:!clear&&reserved});
+      if(session!==epoch)return;
+      notGoingDates=new Set(result.notGoingDates);
+      if(!clear){selected.delete(date);dirty.delete(date);collapsedDays.delete(date);}
+      hydrate();$('#save-message').textContent=clear?'Decisión quitada. Podés elegir horarios y guardar tu reserva; esto no restaura turnos cancelados.':'✓ No vas el '+label(date)+'. No recibirás el recordatorio de esa fecha.'+(result.cancelled?' Se cancelaron tus reservas del día.':'');
+    });return;
+  }
   const button=e.target.closest('[data-toggle-day]');if(!button)return;
   const date=button.dataset.toggleDay;
   if(collapsedDays.has(date))collapsedDays.delete(date);else collapsedDays.add(date);
@@ -202,7 +246,7 @@ $('#day-list').addEventListener('click',e=>{
 });
 $('#day-list').addEventListener('change',e=>{
   const t=e.target,key=t.dataset.day||t.dataset.date;
-  if(!key||!profile||!days[key]||days[key].blocked||Date.now()>=deadline(key))return;
+  if(!key||!profile||!days[key]||days[key].blocked||notGoingDates.has(key)||Date.now()>=deadline(key))return;
   const existing=shift=>current().some(r=>r.uid===user.uid&&r.dateKey===key&&(!shift||r.shift===shift)&&isActive(r));
   if(t.dataset.day){if(t.checked)selected.set(key,{});else if(existing()){t.checked=true;$('#save-message').textContent='Para cancelar, usá el botón Cancelar reserva en Mis reservas.';return;}else selected.delete(key);}
   else if(t.dataset.shift){const shift=t.dataset.shift;if(t.checked)selected.get(key)[shift]={portions:1,diet:profile.diet,modalityId:''};else delete selected.get(key)[shift];}
@@ -211,6 +255,8 @@ $('#day-list').addEventListener('change',e=>{
 });
 $('#day-list').addEventListener('input',e=>{const t=e.target;if(t.dataset.field==='diet'){selected.get(t.dataset.date)[t.dataset.shiftField].diet=t.value;dirty.add(t.dataset.date);renderFirstUse();}});
 $('#save-button').addEventListener('click',()=>action(async()=>{
+  const session=epoch,fresh=await studentRequest(user,'/api/day-response');if(session!==epoch)return;notGoingDates=new Set(fresh.week===week?fresh.notGoingDates:[]);
+  if([...selected.keys()].some(date=>notGoingDates.has(date)))throw new Error('Un día está marcado como No voy. Tocá Volver a elegir antes de reservarlo.');
   const entries=validateSelections(selected,days,profile),batch=writeBatch(db);
   for(const [dateKey,turns]of entries)for(const shift of SHIFTS){
     const generation=days[dateKey].generation,id=reservationId(user.uid,dateKey,shift,generation),old=reservations.find(x=>x.id===id);
@@ -344,4 +390,12 @@ $('#week-template-form').addEventListener('submit',e=>{e.preventDefault();if(!us
  const schedule={};for(const day of document.querySelectorAll('[name="template-day"]:checked'))schedule[day.value]=Object.fromEntries(SHIFTS.map(shift=>[shift,Number(document.querySelector('[data-template-day="'+day.value+'"][data-template-shift="'+shift+'"]').value)]));
  const config=validateTemplate({schedule});await setDoc(doc(db,'reservationPreferences',user.uid),{...config,updatedAt:serverTimestamp()});$('#week-template-dialog').close();$('#app-status').textContent='Configuración guardada. Tocá Usar mi semana y luego Guardar reserva semanal.';
  }catch(err){$('#template-message').textContent=err.code==='permission-denied'?'No se pudo guardar la configuración. Volvé a iniciar sesión; si el problema continúa, avisá al personal del comedor.':err.message;throw err;}});});
-$('#apply-template').addEventListener('click',()=>{if(!user||!profile||!weekTemplate||busy||!dataReady||!reservationsReady)return;try{const result=applyWeekTemplate(weekTemplate,dates(),days,reservations,user.uid,profile,selected);for(const date of result.applied){selected.set(date,result.selection.get(date));dirty.add(date);collapsedDays.delete(date);}renderDays();$('#save-message').textContent=(result.applied.length?'Se configuraron '+result.applied.length+' días. Revisá y tocá Guardar reserva semanal.':'No hay días disponibles para esta configuración.')+(result.skipped.length?' No se aplicó en: '+result.skipped.map(s=>label(s.date)+' ('+s.reason+')').join('; ')+'.':'');if(result.applied.length)$('#save-button').focus();}catch(err){error(err);}});
+$('#apply-template').addEventListener('click',()=>{if(!user||!profile||!weekTemplate||busy||!dataReady||!reservationsReady)return;action(async()=>{
+ const session=epoch,fresh=await studentRequest(user,'/api/day-response');if(session!==epoch)return;notGoingDates=new Set(fresh.week===week?fresh.notGoingDates:[]);
+ const availableDays=Object.fromEntries(Object.entries(days).map(([date,day])=>[date,notGoingDates.has(date)?{...day,blocked:true}:day]));
+ const result=applyWeekTemplate(weekTemplate,dates(),availableDays,reservations,user.uid,profile,selected);
+ for(const date of notGoingDates){selected.delete(date);dirty.delete(date);}
+ for(const date of result.applied){selected.set(date,result.selection.get(date));dirty.add(date);collapsedDays.delete(date);}
+ renderDays();$('#save-message').textContent=(result.applied.length?'Se configuraron '+result.applied.length+' días. Revisá y tocá Guardar reserva semanal.':'No hay días disponibles para esta configuración.')+(result.skipped.length?' No se aplicó en: '+result.skipped.map(s=>label(s.date)+' ('+(notGoingDates.has(s.date)?'marcaste No voy':s.reason)+')').join('; ')+'.':'');if(result.applied.length)$('#save-button').focus();
+});});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user&&profile)void loadDayResponses();});

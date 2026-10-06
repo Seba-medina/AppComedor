@@ -46,8 +46,14 @@
     },
     "api/email-check.js": {
       "maxDuration": 60
+    },
+    "api/welcome.js": {
+      "maxDuration": 60
+    },
+    "api/day-response.js": {
+      "maxDuration": 30
     }
   },
-  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs tests/admin-claims.test.mjs",
+  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs tests/admin-claims.test.mjs tests/student-messages.test.mjs",
   "outputDirectory": "public"
 }

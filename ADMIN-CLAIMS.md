@@ -12,7 +12,7 @@ Estado: preparada, no activada. Los roles de producción y el cliente actual no 
 - scripts/apply-admin-claims.mjs: exige verificar ambos roles; compara hashes de las fuentes originales, guarda copia local y prepara los reemplazos. No asigna roles ni despliega.
 - server/mail-recipients.mjs: destinatarios de correo exclusivamente del servidor; son direcciones de entrega, no autorización.
 - tests/admin-claims.test.mjs: identidad, conservación de claims, filtros por UID y comprobaciones del candidato.
-- tests/rules-claims.cjs y tests/ui-claims.cjs: pruebas preparadas para emulador/interfaz; requieren ejecución en un entorno con dependencias de tests antes de activación.
+- tests/rules-claims.cjs y tests/ui-claims.cjs: pruebas de emulador/interfaz ejecutadas el 6 de octubre, incluidos los cambios de No voy y bienvenida; la activación y verificación con cuentas reales siguen pendientes.
 
 ## Orden para activar sin bloquear administradores
 
@@ -22,7 +22,7 @@ Estado: preparada, no activada. Los roles de producción y el cliente actual no 
 4. Ejecutar node scripts/manage-admin-claims.mjs check. Una salida incompleta significa NO activar.
 5. Ejecutar node scripts/manage-admin-claims.mjs grant y repetir check. Ambas filas deben mostrar claim:true y protected:true. Si hay error parcial, repetir grant y verificar; las dos operaciones Auth no son una transacción global.
 6. Cerrar sesión y volver a ingresar con ambos administradores para renovar tokens.
-7. Ejecutar las pruebas de candidato: node --test tests/admin-claims.test.mjs; node tests/ui-claims.cjs con las dependencias de tests; pruebas rules-claims.cjs dentro del emulador demo-appcomedor. Los tests de emulador/interfaz no se ejecutaron desde la sesión sin entorno de trabajo.
+7. Ejecutar las pruebas de candidato: node --test tests/admin-claims.test.mjs; node tests/ui-claims.cjs con las dependencias de tests; pruebas rules-claims.cjs dentro del emulador demo-appcomedor. Las pruebas del candidato pasaron en el entorno de trabajo el 6 de octubre; requieren repetición si cambian estas fuentes antes de activar.
 8. Ejecutar node scripts/apply-admin-claims.mjs. Si alguna fuente cambió, se detiene antes de copiar para no perder nuevas funciones.
 9. Publicar las nuevas reglas de Firestore primero, con ambos roles ya verificados. GitHub/Vercel no publica reglas Firebase. Conservar la copia anterior para recuperación. No publicar directamente el archivo candidato antes de completar pasos 4–7.
 10. Commit/push de los reemplazos de cliente/servidor. Comprobar acceso de ambos administradores, reservas de una cuenta común, PDF, respaldo y borrado protegido. Eliminar las credenciales administrativas temporales una vez finalizada la migración.

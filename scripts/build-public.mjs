@@ -2,7 +2,7 @@ import {copyFile,mkdir,readdir,readFile,rm,lstat} from 'node:fs/promises';
 import {resolve,dirname,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url)),out=resolve(root,'public');
-export const PUBLIC_FILES=['index.html','app.js','firebase.js','app-check-config.js','styles.css','tutorial.js','domain.mjs','management.mjs','backup.mjs','daily-pdf.mjs','week-template.mjs','privacidad.html','menu-semanal.jpg'];
+export const PUBLIC_FILES=['index.html','app.js','firebase.js','app-check-config.js','styles.css','tutorial.js','domain.mjs','management.mjs','backup.mjs','daily-pdf.mjs','week-template.mjs','student-api.mjs','privacidad.html','menu-semanal.jpg'];
 async function copy(source,destination){const stat=await lstat(source);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('Only regular public files may be copied');await mkdir(dirname(destination),{recursive:true});await copyFile(source,destination);}
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 for(const path of PUBLIC_FILES)await copy(resolve(root,path),resolve(out,path));

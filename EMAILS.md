@@ -75,3 +75,11 @@ El respaldo manual sigue incluyendo perfiles y su opción de correo. No exporta 
 Documentación: https://resend.com/docs/api-reference/emails/send-email · https://resend.com/docs/dashboard/emails/idempotency-keys · https://vercel.com/docs/cron-jobs/manage-cron-jobs
 
 Recordatorios: lunes a viernes, 09:00–09:59 Argentina, dirigidos a quienes no reservaron para hoy. Excel: lunes a viernes, 10:05–10:59, reservas del día.
+
+## Bienvenida y decisiones por fecha
+
+POST /api/welcome verifica el ID token Firebase de Google, exige perfil y ausencia de bloqueo de borrado, deriva el destinatario de la identidad verificada y usa emailDeliveries para no duplicar el envío por UID. Se solicita al guardar el primer perfil. SMTP incierto no se reintenta automáticamente. El límite es 200 identidades nuevas por día; emailWelcomeRequests impide que reintentos de un UID consuman el cupo nuevamente. No depende del cron ni de su piloto. Requiere las credenciales de Gmail/Firebase existentes.
+
+GET/POST /api/day-response verifica la misma identidad y accede únicamente a dayResponses/{uid}. Cada documento contiene la semana y hasta cinco fechas de intención No voy. El POST solo acepta fechas de la semana actual, habilitadas y antes de las 10 de Argentina. La decisión con reservas vigentes requiere confirmación explícita y cancela ambos turnos en una transacción; quitarla nunca restaura una reserva cancelada. El cron lee nuevamente la decisión antes de enviar cada aviso. Un mensaje ya enviado/en proceso no puede retirarse.
+
+Estas colecciones son privadas del servidor y están cubiertas por la regla final de denegación; no se amplían los permisos del navegador ni se requiere publicar reglas nuevas. El respaldo descargado del panel no incluye estos estados de notificación, al igual que tampoco incluye los registros internos de envío. Los campos adicionales no se agregan al perfil del alumno.

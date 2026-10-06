@@ -1,5 +1,6 @@
 import {cert,getApps,initializeApp} from 'firebase-admin/app';
 import {getFirestore} from 'firebase-admin/firestore';
+import {getAuth} from 'firebase-admin/auth';
 export function adminDb(){
  if(!getApps().length){
   const account=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON||'null');
@@ -8,3 +9,4 @@ export function adminDb(){
  }
  return getFirestore();
 }
+export function adminAuth(){adminDb();return getAuth();}

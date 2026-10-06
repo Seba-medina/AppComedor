@@ -11,8 +11,8 @@ const {JSDOM}=deps('jsdom');
  let capturedBackup=null,failBackupRead=false;
  const dom=new JSDOM(fs.readFileSync('index.html','utf8'),{url:'https://appomedoruner.vercel.app'});
  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
- const document=dom.window.document,records=new Map([['adminRoles/admin',{admin:true}]]),listeners=[],writes=[];
- let authCallback;
+ const document=dom.window.document,records=new Map([['adminRoles/admin',{admin:true}],['adminRoles/admin2',{admin:true}]]),listeners=[],writes=[];
+ let authCallback; const choices=new Map(),welcomeRequests=[];
  const next=new Date(domain.monday()+'T00:00:00Z');next.setUTCDate(next.getUTCDate());
  const week=next.toISOString().slice(0,10);
  let autoId=0;const ref=(...args)=>args.length===1&&args[0]?.path?{path:args[0].path+'/auto'+(++autoId)}:{path:args.filter(x=>typeof x==='string').join('/')};
@@ -23,8 +23,9 @@ const {JSDOM}=deps('jsdom');
  const notify=()=>listeners.filter(x=>x.active).forEach(x=>x.cb(snapshot(x.ref)));
  const set=async(r,d,opts)=>{records.set(r.path,opts?.merge?{...records.get(r.path),...d}:d);writes.push(r.path);notify();};
  const ctx=vm.createContext({document,console,Date:class extends Date{constructor(...args){super(...(args.length?args:[week+'T09:00:00-03:00']));}static now(){return new Date(week+'T09:00:00-03:00').getTime();}},Map,Number,Object,String,JSON,Intl,Promise,...domain,...backupTools,...management,...templateTools,applyWeekTemplate:(...args)=>templateTools.applyWeekTemplate(...args,new Date(week+'T09:00:00-03:00')),RECAPTCHA_ENTERPRISE_SITE_KEY:"",downloadBackup:b=>{capturedBackup=b;},validateSelections:(selected,days,profile)=>domain.validateSelections(selected,days,profile,new Date(week+'T09:00:00-03:00')),
+  studentRequest:async(account,path,body)=>{if(path==='/api/welcome'){welcomeRequests.push(account.uid);return {state:'sent'};}const dates=new Set(choices.get(account.uid)||[]);if(body){if(body.choice==='notGoing'){dates.add(body.date);if(body.confirmCancel)for(const [path,r]of records)if(path.startsWith('reservations/')&&r.uid===account.uid&&r.dateKey===body.date)records.set(path,{...r,cancelled:true});notify();}else dates.delete(body.date);choices.set(account.uid,[...dates]);}return {week,notGoingDates:[...dates],cancelled:body?.confirmCancel?2:0};},
   auth:{},db:{},GoogleAuthProvider:class{setCustomParameters(){}},
-  signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onIdTokenChanged:(a,cb)=>{authCallback=cb;cb(null);},getIdTokenResult:async u=>({claims:{admin:u.uid==='admin'},signInProvider:'google.com'}),
+  signInWithPopup:async()=>{},signOut:async()=>authCallback(null),onIdTokenChanged:(a,cb)=>{authCallback=cb;cb(null);},getIdTokenResult:async u=>({claims:{admin:['admin','admin2'].includes(u.uid)},signInProvider:'google.com'}),
   doc:ref,collection:(...args)=>({...ref(...args),filter:true}),query:(r,...constraints)=>({...r,constraints}),where:(field,op,value)=>({field,op,value}),orderBy:()=>({}),limit:()=>({}),
   onSnapshot:(r,cb)=>{const x={ref:r,cb,active:true};listeners.push(x);cb(snapshot(r));return()=>x.active=false;},
   getDoc:async r=>snapshot(r),getDocs:async r=>snapshot(r),getDocsFromServer:async r=>{if(failBackupRead)throw new Error("Sin conexión");return snapshot(r);},setDoc:set,deleteDoc:async r=>{records.delete(r.path);notify();},
@@ -42,11 +43,11 @@ const {JSDOM}=deps('jsdom');
  document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,false);
  document.querySelector('#profile-toggle').click();assert.equal(document.querySelector('#profile-panel').hidden,true);
  assert.equal(document.querySelector('.sidebar').firstElementChild.className,'menu-card');
- await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
+ await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#first-use-action').textContent,'Completar mi perfil');
  records.set('users/student',{name:'Alumno',condition:'Alumno regular',diet:'Sin TACC',email:'student@example.com'});
- for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
- await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
+ for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});notify();
+ await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#admin-nav').hidden,true);
  document.querySelector('#download-backup').click();await new Promise(r=>setImmediate(r));assert.equal(capturedBackup,null);
  assert.equal(document.querySelector('#profile-form').hidden,false);
@@ -54,7 +55,7 @@ const {JSDOM}=deps('jsdom');
  document.querySelector('#profile-reminders').checked=false;
  document.querySelector('#profile-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
  assert.equal(records.get('users/student').reminderEmails,false);
- await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});
+ await authCallback({uid:'student',email:'student@example.com',displayName:'Alumno',emailVerified:true});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#profile-reminders').checked,false);
 
  const check=selector=>{const e=document.querySelector(selector);assert.ok(e,selector);e.checked=true;e.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
@@ -82,7 +83,7 @@ const {JSDOM}=deps('jsdom');
  assert.match(document.querySelector('#my-history').textContent,/Cancelada/);
  records.set('days/'+week,{week,blocked:true,generation:1});notify();
  assert.match(document.querySelector('#my-history').textContent,/Cancelada por bloqueo/);
- await authCallback({uid:'admin',email:ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});
+ await authCallback({uid:'admin',email:ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#admin-nav').hidden,false);
  const originalCaption=document.querySelector('#week-caption').textContent;
  document.querySelector('#admin-week-next').click();
@@ -104,17 +105,17 @@ const {JSDOM}=deps('jsdom');
  markAttendance(false);await new Promise(r=>setImmediate(r));
  studentRow=document.querySelector('[data-delete-user="student"]').closest('tr');assert.equal(studentRow.cells[3].textContent,'0');
 
- await authCallback({uid:'admin2',email:'marchesemarialaura@gmail.com',emailVerified:true,displayName:'Laura'});
+ await authCallback({uid:'admin2',email:'marchesemarialaura@gmail.com',emailVerified:true,displayName:'Laura'});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#admin-nav').hidden,false);
- await authCallback({uid:'fakeadmin2',email:'marchesemarialaura@gmail.com',emailVerified:false});
+ await authCallback({uid:'fakeadmin2',email:'marchesemarialaura@gmail.com',emailVerified:false});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#admin-nav').hidden,true);
  document.querySelector('#users-list').textContent='Dato privado anterior';
  document.querySelector('#profile-name').value='Persona anterior';
- authCallback(null);
+ authCallback(null);await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#users-list').textContent,'');
  assert.equal(document.querySelector('#profile-name').value,'');
  records.set('users/student',{name:'<img src=x onerror=alert(1)>',condition:'Alumno regular',diet:'<script>alert(1)</script>',email:'student@example.com'});
- await authCallback({uid:'admin',email:ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});
+ await authCallback({uid:'admin',email:ADMIN_EMAIL,emailVerified:true,displayName:'Admin'});await new Promise(r=>setImmediate(r));
  assert.equal(document.querySelector('#users-list img'),null);
  assert.equal(document.querySelector('#users-list script'),null);
  assert.match(document.querySelector('#users-list').textContent,/<img src=x/);
@@ -146,14 +147,14 @@ const {JSDOM}=deps('jsdom');
  document.querySelector('[data-delete-modality="curso"]').click();await new Promise(r=>setImmediate(r));
  assert.equal(records.has('modalities/curso'),false);
  records.set('users/template-student',{name:'Plantilla',condition:'Alumno regular',diet:'Sin TACC',email:'template@example.com'});
- for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});
- await authCallback({uid:'template-student',email:'template@example.com',emailVerified:true});
+ for(const date of domain.weekDays(week))records.set('days/'+date,{week,blocked:false,generation:0});notify();
+ await authCallback({uid:'template-student',email:'template@example.com',emailVerified:true});await new Promise(r=>setImmediate(r));
  document.querySelector('#configure-template').click();assert.equal(document.querySelector('#week-template-dialog').open,true);
  document.querySelector('[data-template-day="1"][data-template-shift="mediodia"]').value='0';
  document.querySelector('[data-template-day="1"][data-template-shift="noche"]').value='2';
  document.querySelector('#week-template-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
  assert.equal(records.get('reservationPreferences/template-student').schedule['1'].noche,2);
- document.querySelector('#apply-template').click();assert.equal(document.querySelectorAll('[data-day]:checked').length,5);
+ document.querySelector('#apply-template').click();await new Promise(r=>setImmediate(r));assert.equal(document.querySelectorAll('[data-day]:checked').length,5);
  assert.equal([...records].filter(([p,r])=>p.startsWith('reservations/')&&r.uid==='template-student').length,0);
  document.querySelector('#save-button').click();await new Promise(r=>setImmediate(r));
  const savedTemplate=[...records].filter(([p,r])=>p.startsWith('reservations/')&&r.uid==='template-student').map(([,r])=>r);
@@ -163,5 +164,19 @@ const {JSDOM}=deps('jsdom');
  assert.equal(document.querySelector('[data-template-day="1"][data-template-shift="noche"]').value,'2');
  assert.equal(document.querySelector('[data-template-day="0"][data-template-shift="mediodia"]').value,'2');
  console.log('OK: eliminación individual, masiva, protección de ambos administradores y modalidad.');
+
+ // No voy is saved immediately, survives login, suppresses template selection and can be removed.
+ await authCallback({uid:'choice-student',email:'choice@example.com',emailVerified:true});await new Promise(r=>setImmediate(r));
+ document.querySelector('#profile-name').value='Usuario decisiones';document.querySelector('#profile-form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setImmediate(r));
+ assert(welcomeRequests.includes('choice-student'));assert.match(document.querySelector('#welcome-message').textContent,/Bienvenida enviada/);
+ const choiceDate=domain.weekDays(week)[1];
+ document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));
+ assert.equal(document.querySelector('[data-day="'+choiceDate+'"]').disabled,true);assert.equal(document.querySelector('[data-no-going="'+choiceDate+'"]').getAttribute('aria-pressed'),'true');
+ assert.deepEqual(choices.get('choice-student'),[choiceDate]);assert.match(document.querySelector('#save-message').textContent,/No recibirás/);
+ records.set('reservationPreferences/choice-student',{schedule:{'0':{mediodia:2,noche:0},'1':{mediodia:1,noche:1}}});notify();
+ document.querySelector('#apply-template').click();await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('[data-day="'+choiceDate+'"]').checked,false);assert.match(document.querySelector('#save-message').textContent,/marcaste No voy/);
+ document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('[data-day="'+choiceDate+'"]').disabled,false);assert.deepEqual(choices.get('choice-student'),[]);
+ document.querySelector('[data-no-going="'+choiceDate+'"]').click();await new Promise(r=>setImmediate(r));
+ await authCallback(null);await new Promise(r=>setImmediate(r));await authCallback({uid:'choice-student',email:'choice@example.com',emailVerified:true});await new Promise(r=>setImmediate(r));assert.equal(document.querySelector('[data-no-going="'+choiceDate+'"]').getAttribute('aria-pressed'),'true');
  console.log('OK: UI sin sesión, rol alumno/admin, preferencias, ambos turnos, guardado y cancelación actualizada con SDK simulado.');
 })().catch(e=>{console.error(e);process.exitCode=1});

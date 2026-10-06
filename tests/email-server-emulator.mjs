@@ -8,9 +8,10 @@ const secret='only-emulator-secret-'.repeat(3);Object.assign(process.env,{CRON_S
 const req={method:'GET',headers:{authorization:'Bearer '+secret}};
 const response=()=>({code:200,setHeader(){},status(n){this.code=n;return this;},json(v){this.body=v;return this;},send(v){this.body=v;return this;}});
 await db.collection('days').doc('2026-10-05').set({generation:2,blocked:false});
-for(const [uid,extra] of [['a',{}],['b',{}],['c',{reminderEmails:false}],['d',{}],['e',{}]])await db.collection('users').doc(uid).set({name:uid,email:uid+'@example.com',...extra});
+for(const [uid,extra] of [['a',{}],['b',{}],['c',{reminderEmails:false}],['d',{}],['e',{}],['f',{}]])await db.collection('users').doc(uid).set({name:uid,email:uid+'@example.com',...extra});
 await db.collection('reservations').doc('d-day').set({uid:'d',dateKey:'2026-10-05',generation:2,portions:1,shift:'mediodia',name:'d'});
 await db.collection('reservations').doc('e-day').set({uid:'e',dateKey:'2026-10-05',generation:2,cancelled:true,portions:1,shift:'mediodia',name:'e'});
+await db.collection('dayResponses').doc('f').set({week:'2026-10-05',notGoingDates:['2026-10-05','2026-10-06','2026-10-07']});
 const original=global.fetch,requests=[];let tick=0,partial=true;
 global.fetch=async(url,opts)=>{assert.equal(url,'https://api.resend.com/emails');requests.push(JSON.parse(opts.body));return {ok:true,json:async()=>({id:'simulated-'+requests.length})};};
 try{

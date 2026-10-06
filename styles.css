@@ -46,3 +46,5 @@
 
 #profile-form .notification-choice{display:flex;align-items:center;gap:10px;line-height:1.5;margin-top:16px}#profile-reminders{width:20px;height:20px;flex:none;accent-color:#124d33}
 .tutorial-week-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.tutorial-week-fields label:last-child{grid-column:auto}
+
+.day-intent{font-size:12px;padding:7px 10px;border:1px solid #a7b9ac;border-radius:9px;background:#fffdf7;color:#294b37;white-space:normal}.day-intent[aria-pressed="true"]{background:#e4efe5;border-color:#759b7e;font-weight:700}.day-row.is-not-going{background:#f0f5ed;border-color:#9cb6a0}.day-response-note{font-size:13px;color:#526856;line-height:1.5}.day-intent:disabled{opacity:.5;cursor:default}#welcome-message{font-size:13px;line-height:1.5}

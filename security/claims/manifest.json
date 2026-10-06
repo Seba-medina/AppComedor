@@ -2,7 +2,7 @@
   {
     "target": "app.js",
     "source": "security/claims/app.js",
-    "originalBlobSha": "1fdeab0dca7e9740aab3058e3fb5e795751bb80a"
+    "originalBlobSha": "6cabcfe5ba0da5ff3c701b6dcc88ccd5c43c6e42"
   },
   {
     "target": "domain.mjs",
@@ -27,7 +27,7 @@
   {
     "target": "server/notifications.mjs",
     "source": "security/claims/server/notifications.mjs",
-    "originalBlobSha": "041489c44fcc6cf1a430aa952a05100fd51f916c"
+    "originalBlobSha": "c0a343bdc106eb3a8997a885ecebeae8831b35d7"
   },
   {
     "target": "server/email-test.mjs",
@@ -37,6 +37,6 @@
   {
     "target": "server/email-job.mjs",
     "source": "security/claims/server/email-job.mjs",
-    "originalBlobSha": "8ed0ff0fa918cb029120cbcbc805215c0edba5e9"
+    "originalBlobSha": "a5beb67de98fb90d8a154f65b3f405d194340710"
   }
 ]
