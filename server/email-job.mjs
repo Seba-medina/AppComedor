@@ -49,16 +49,16 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
    const snapshot=await db.collection('reservations').where('dateKey','==',timing.date).get(),records=snapshot.docs.map(d=>d.data());
    const modalities=await db.collection('modalities').get(),names=new Map(modalities.docs.map(d=>[d.id,d.data().name]));
    const content=(await dailyWorkbook(timing.date,records.map(r=>({...r,modalityName:r.modalityId?(names.get(r.modalityId)||'Modalidad eliminada'):'Habitual'})),day)).toString('base64');
-   for(const email of ADMIN_EMAILS){await pause(600);const payload={from:sender,to:[email],subject:'Reservas del comedor · '+timing.date,text:'Adjuntamos las reservas y porciones del día. La planilla refleja los datos al generarla. Consultá el panel por cambios posteriores.',attachments:[{filename:'reservas-'+timing.date+'.xlsx',content}]};counts[await send(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
+   let attempted=false;for(const email of ADMIN_EMAILS){const key='report_'+timing.date+'_'+id(email),previous=(await db.collection('emailDeliveries').doc(id(key)).get()).data();if(['sent','sending','uncertain'].includes(previous?.state)){counts.skipped++;continue;}if(attempted||clock()-began>=10000)return res.status(200).json({more:true,...counts});attempted=true;await pause(600);const payload={from:sender,to:[email],subject:'Reservas del comedor · '+timing.date,text:'Adjuntamos las reservas y porciones del día. La planilla refleja los datos al generarla. Consultá el panel por cambios posteriores.',attachments:[{filename:'reservas-'+timing.date+'.xlsx',content}]};counts[await send(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
   }else if(!day.blocked){
    const progressRef=db.collection('emailJobProgress').doc('reminders_'+timing.date),progress=(await progressRef.get()).data();
    if(progress?.done)return res.status(200).json({done:true,...counts});
    let cursor=progress?.lastUid||null,more=true;
-   while(more&&clock()-began<35000&&localSchedule(kind,now()).allowed){
+   while(more&&clock()-began<10000&&localSchedule(kind,now()).allowed){
     let query=db.collection('users').orderBy('__name__').limit(50);if(cursor)query=query.startAfter(cursor);const page=await query.get();
     if(page.empty){more=false;break;}
     for(const doc of page.docs){
-     if(clock()-began>=35000||!localSchedule(kind,now()).allowed)return res.status(503).json({retry:true,...counts});
+     if(clock()-began>=10000||!localSchedule(kind,now()).allowed)return res.status(200).json({more:true,...counts});
      const sentKey='reminder_'+timing.date+'_'+id(doc.id),sent=(await db.collection('emailDeliveries').doc(id(sentKey)).get()).data();
      if(sent?.state==='sent'){counts.skipped++;}
      else {
@@ -77,7 +77,7 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
     }
     more=page.size===50;
    }
-   if(more)return res.status(503).json({retry:true,...counts});
+   if(more)return res.status(200).json({more:true,...counts});
    await progressRef.set({lastUid:cursor,done:true,updatedAt:FieldValue.serverTimestamp()},{merge:true});
    // Caller may retry within 09:00–09:59; sent ledger prevents repeats.
   }

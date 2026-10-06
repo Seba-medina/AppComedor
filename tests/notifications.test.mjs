@@ -69,3 +69,12 @@ test('Gmail limita el remitente a la cuenta del comedor y exige contraseña de a
   process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcd efgh ijkl mnop';assert.equal(gmailConfigured(),true);const config=gmailOptions();assert.equal(config.secure,true);assert.equal(config.port,465);assert.equal(config.auth.pass,'abcdefghijklmnop');
  }finally{for(const key of ['GMAIL_USER','GMAIL_APP_PASSWORD'])if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}
 });
+
+test('Gmail limita la espera SMTP y cierra el transporte sin reenviar',async()=>{
+ const {sendGmail}=await import('../server/gmail.mjs');
+ process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcdefghijklmnop';
+ let calls=0,closed=0;
+ const createTransport=()=>({sendMail(){calls++;return new Promise(()=>{});},close(){closed++;}});
+ await assert.rejects(sendGmail({to:['test@example.com'],text:'Prueba'},'timeout-test',{createTransport,timeoutMs:5}),{code:'ETIMEDOUT'});
+ assert.equal(calls,1);assert.equal(closed,1);
+});

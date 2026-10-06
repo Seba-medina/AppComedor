@@ -15,13 +15,14 @@ const original=global.fetch,requests=[];let tick=0,partial=true;
 global.fetch=async(url,opts)=>{assert.equal(url,'https://api.resend.com/emails');requests.push(JSON.parse(opts.body));return {ok:true,json:async()=>({id:'simulated-'+requests.length})};};
 try{
  const opts={getDb:()=>db,now:()=>new Date('2026-10-05T09:00:00-03:00'),clock:()=>tick,pause:async()=>{if(partial)tick=40000;}};
- let res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,503);assert.equal(requests.length,1);
+ let res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,200);assert.equal(res.body.more,true);assert.equal(requests.length,1);
  const cursor=(await db.collection('emailJobProgress').doc('reminders_2026-10-05').get()).data();assert.equal(cursor.lastUid,'a');
  partial=false;tick=0;res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,200);assert.equal(requests.length,2);assert.deepEqual(requests.map(r=>r.to[0]),['a@example.com','b@example.com']);
  res=response();await emailJob(req,res,'reminders',opts);assert.equal(requests.length,2);assert.equal(res.body.done,true);
  const token=reminderToken('b',secret);res=response();await unsubscribe({method:'GET',query:{token}},res);assert.equal((await db.collection('users').doc('b').get()).data().reminderEmails,undefined);
  res=response();await unsubscribe({method:'POST',query:{token}},res);assert.equal(res.code,200);assert.equal((await db.collection('users').doc('b').get()).data().reminderEmails,false);
- res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:05:00-03:00')});assert.equal(res.code,200);assert.equal(requests.length,4);
+ res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:05:00-03:00')});assert.equal(res.code,200);assert.equal(res.body.more,true);assert.equal(requests.length,3);
+ res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:06:00-03:00')});assert.equal(res.code,200);assert.equal(requests.length,4);
  assert.deepEqual(requests.slice(2).map(r=>r.to[0]),['sebastianezequielmedina@gmail.com','marchesemarialaura@gmail.com']);assert.ok(requests[2].attachments[0].filename.endsWith('.xlsx'));
  res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:06:00-03:00')});assert.equal(requests.length,4);
  process.env.EMAIL_TRANSPORT='gmail';process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcdefghijklmnop';

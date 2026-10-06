@@ -32,7 +32,7 @@ Para menos de 200 alumnos sigue siendo necesario procesar más de un lote cuando
 
 Configurar un programador HTTPS que ejecute GET de `/api/cron/reminders` cada minuto entre las 09:00 y las 09:59 de lunes a viernes, hora Argentina, y `/api/cron/reservations` desde las 10:05 con reintentos. Enviar la cabecera `Authorization: Bearer <CRON_SECRET>` y no poner el secreto en la URL. Alternativamente, usar las expresiones de cron para Vercel Pro descritas en `EMAILS.md`, previa decisión sobre el plan. No se creó ni contrató un programador externo.
 
-Comprobar en sus registros que los lotes terminaron. Los endpoints devuelven 503 si faltan credenciales o queda un lote pendiente; 500 ante un error de envío; 401 sin autorización. Los mensajes aceptados no vuelven a enviarse. Cada lote guarda el cursor de los alumnos procesados.
+Comprobar en sus registros que los lotes terminaron. Los endpoints devuelven 503 si faltan credenciales; 200 con `more: true` si queda un lote pendiente; 500 ante un error de envío; 401 sin autorización. Los mensajes aceptados no vuelven a enviarse. Cada lote guarda el cursor de los alumnos procesados.
 
 ## Paso 4: comprobación sin correos
 
@@ -69,3 +69,5 @@ El Message-ID estable sirve para rastrear, no garantiza que Gmail elimine duplic
 Si Google revoca la contraseña de aplicación al cambiar la contraseña de la cuenta, crear otra y reemplazarla en Vercel. Mantener la verificación en dos pasos y controlar quién tiene acceso a la cuenta del comedor.
 
 Documentación: https://support.google.com/accounts/answer/185833 · https://support.google.com/mail/answer/22839 · https://nodemailer.com/guides/using-gmail
+
+Para cron-job.org gratuito: tandas de hasta 10 segundos antes de iniciar otro envío, con espera SMTP limitada a 15 segundos. El Excel se envía a un administrador por ejecución; la siguiente ejecución completa el otro. Programar llamadas cada minuto, aunque la anterior devuelva 200. Un SMTP que supera la espera queda como resultado incierto y requiere revisión; no se repite automáticamente.
