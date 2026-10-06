@@ -26,10 +26,13 @@ try{
  assert.deepEqual(requests.slice(2).map(r=>r.to[0]),['sebastianezequielmedina@gmail.com','marchesemarialaura@gmail.com']);assert.ok(requests[2].attachments[0].filename.endsWith('.xlsx'));
  res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:06:00-03:00')});assert.equal(requests.length,4);
  process.env.EMAIL_TRANSPORT='gmail';process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcdefghijklmnop';
+ await db.collection('users').doc('z-admin').set({name:'Admin',email:'sebastianezequielmedina@gmail.com'});
+ await db.collection('reservations').doc('z-admin-day').set({uid:'z-admin',dateKey:'2026-10-06',generation:0,portions:1,shift:'mediodia',name:'Admin'});
  await db.collection('days').doc('2026-10-06').set({generation:0,blocked:false});
  const gmailRequests=[],gmailOpts={...opts,now:()=>new Date('2026-10-06T09:00:00-03:00'),send:(db,key,payload)=>deliver(db,key,payload,{smtpSend:async(p)=>{gmailRequests.push(p);return {messageId:'simulated-gmail-'+gmailRequests.length};}})};
- res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(res.code,200);assert.deepEqual(gmailRequests.map(p=>p.to[0]),['a@example.com','d@example.com','e@example.com']);
+ res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(res.code,200);assert.deepEqual(gmailRequests.map(p=>p.to[0]),['a@example.com','d@example.com','e@example.com','sebastianezequielmedina@gmail.com']);
  assert.equal(gmailRequests[0].from,'Comedor UNER <comedorunerfcal@gmail.com>');
- res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(gmailRequests.length,3);
+ res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(gmailRequests.length,4);assert.ok(gmailRequests[3].text.includes('PRUEBA PARA ADMINISTRADORES'));
+ await db.collection('days').doc('2026-10-07').set({generation:0,blocked:false});process.env.EMAIL_JOBS_PILOT_DATE='2026-10-06';res=response();await emailJob(req,res,'reminders',{...gmailOpts,now:()=>new Date('2026-10-07T09:00:00-03:00')});assert.equal(res.body.pilotClosed,true);assert.equal(gmailRequests.length,4);res=response();await emailJob(req,res,'report',{...gmailOpts,now:()=>new Date('2026-10-07T10:05:00-03:00')});assert.equal(res.body.pilotClosed,true);assert.equal(gmailRequests.length,4);delete process.env.EMAIL_JOBS_PILOT_DATE;res=response();await emailJob(req,res,'reminders',{...gmailOpts,now:()=>new Date('2026-10-07T09:00:00-03:00')});assert.equal(gmailRequests.length,7);assert.ok(gmailRequests.slice(4).every(p=>p.to[0]!=='sebastianezequielmedina@gmail.com'));
  console.log('OK: emulador del servidor, lotes/cursor, exclusiones, reintentos sin duplicados, baja GET/POST y Excel solo a administradores; proveedor simulado.');
 }finally{global.fetch=original;await db.terminate();}

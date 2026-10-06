@@ -90,3 +90,8 @@ test('Textos finales identifican comedor, corte, baja y edición de la planilla'
  const reminder=reminderMail('u',profile,'2026-10-06',secret),report=reportMail('admin@example.com','2026-10-06','excel-base64');
  assert.equal(reminder.subject,'Recordatorio de reserva · Comedor UNER');assert.ok(reminder.text.includes('10:00 (hora de Argentina)'));assert.ok(reminder.text.includes('Mi perfil'));assert.ok(report.text.includes('columna Asistió'));assert.ok(report.text.includes('no se guardan en la app'));assert.equal(report.attachments[0].filename,'reservas-2026-10-06.xlsx');assert.ok(!report.text.includes('PRUEBA'));assert.ok(!reminder.text.includes('PRUEBA'));
 });
+
+test('Excepción de administradores solo el 6 de octubre, conserva bajas y bloqueo',()=>{
+ const admin={...profile,email:'sebastianezequielmedina@gmail.com'},reserved=[{generation:2,portions:1}];
+ assert.equal(wantsReminder(admin,reserved,day,'2026-10-06'),true);assert.equal(wantsReminder(admin,reserved,day,'2026-10-07'),false);assert.equal(wantsReminder(admin,reserved,day,'2026-10-05'),false);assert.equal(wantsReminder({...admin,reminderEmails:false},[],day,'2026-10-06'),false);assert.equal(wantsReminder(admin,[],{...day,blocked:true},'2026-10-06'),false);assert.equal(wantsReminder(profile,reserved,day,'2026-10-06'),false);
+});

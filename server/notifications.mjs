@@ -7,8 +7,11 @@ export function localSchedule(kind,now=new Date()){
  const date=today;
  return {date,allowed:kind==='reminders'?weekday>=1&&weekday<=5&&mins>=540&&mins<600:kind==='report'&&weekday>=1&&weekday<=5&&mins>=605};
 }
-export function wantsReminder(profile,records,day){
- if(!day||day.blocked||profile.reminderEmails===false||ADMIN_EMAILS.includes(profile.email))return false;
+export const ADMIN_REMINDER_TEST_DATE='2026-10-06';
+export const adminReminderTrial=(profile,date)=>date===ADMIN_REMINDER_TEST_DATE&&ADMIN_EMAILS.includes(profile.email);
+export function wantsReminder(profile,records,day,date=null){
+ if(!day||day.blocked||profile.reminderEmails===false)return false;
+ if(ADMIN_EMAILS.includes(profile.email))return adminReminderTrial(profile,date);
  return !records.some(r=>r.generation===day.generation&&(r.cancelled===true||reservationStatus(r,day)==='Confirmada'));
 }
 export function reminderToken(uid,secret){return Buffer.from(uid).toString('base64url')+'.'+createHmac('sha256',secret).update('unsubscribe:'+uid).digest('base64url');}

@@ -85,3 +85,7 @@ Para probar el Excel de mañana: `/api/email-test-excel?day=tomorrow`. Calcula m
 Las planillas incluyen fecha y hora original de creación de la reserva en Argentina (`createdAt`, no la última edición). Los registros sin esa fecha muestran Sin registro. La segunda versión de prueba de Excel tiene una clave independiente para comprobar esta columna sin activar los envíos generales.
 
 GET `/api/email-test-reminder` envía solo a Sebastián una muestra del recordatorio, claramente marcada PRUEBA. No comprueba elegibilidad ni reservas porque es una vista previa autorizada para el administrador. Usa su perfil real para el saludo y enlace de baja; requiere UNSUBSCRIBE_SECRET, no activa envíos generales y tiene clave diaria propia.
+
+Prueba del 6 de octubre de 2026: incluye los perfiles administradores habilitados en el recordatorio de las 9:00, aunque hayan reservado, con aviso PRUEBA PARA ADMINISTRADORES. Desde el 7 de octubre vuelve a excluirlos automáticamente. Respeta bajas de correo, bloqueo y eliminación. Los alumnos conservan los filtros habituales. Excel diario sin cambios. Requiere activar EMAIL_JOBS_ENABLED en Production, redeploy y restaurar/habilitar las dos tareas externas con sus URL de producción.
+
+Para habilitar exclusivamente el día del piloto, guardar `EMAIL_JOBS_PILOT_DATE=2026-10-06` en Production junto con EMAIL_JOBS_ENABLED=true. El 7 de octubre los cron devuelven pilotClosed y no envían nada. Eliminar esa variable solo cuando se autorice el funcionamiento diario. La fecha se compara en Argentina.

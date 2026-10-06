@@ -3,7 +3,7 @@ import {validCronAuth} from './cron-auth.mjs';
 import {FieldValue} from 'firebase-admin/firestore';
 import {ADMIN_EMAILS} from '../domain.mjs';
 import {adminDb} from './firebase-admin.mjs';
-import {localSchedule,wantsReminder,reminderMail,reportMail} from './notifications.mjs';
+import {localSchedule,wantsReminder,reminderMail,reportMail,adminReminderTrial} from './notifications.mjs';
 import {GMAIL_SENDER,gmailConfigured,sendGmail} from './gmail.mjs';
 import {dailyWorkbook} from './workbook.mjs';
 const id=value=>createHash('sha256').update(value).digest('hex');
@@ -39,6 +39,7 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
  if(process.env.EMAIL_JOBS_ENABLED!=='true'||!['gmail','resend'].includes(transport)||(transport==='gmail'?!gmailConfigured():(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM))||!process.env.UNSUBSCRIBE_SECRET||process.env.UNSUBSCRIBE_SECRET.length<32)return res.status(503).json({error:'Email jobs not configured'});
  const sender=transport==='gmail'?'Comedor UNER <'+GMAIL_SENDER+'>':process.env.EMAIL_FROM;
  const timing=localSchedule(kind,now());if(!timing.allowed)return res.status(200).json({skipped:true});
+ if(process.env.EMAIL_JOBS_PILOT_DATE&&timing.date!==process.env.EMAIL_JOBS_PILOT_DATE)return res.status(200).json({skipped:true,pilotClosed:true});
  let db,lock,owner;const began=clock(),counts={sent:0,skipped:0};
  try{
   db=getDb();owner=randomUUID();lock=db.collection('emailJobLocks').doc(kind+'_'+timing.date);
@@ -65,10 +66,11 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
       // Check opt-out, recent reservations, blocking and deletion before each send.
       const [fresh,current,latestDay,deleting]=await Promise.all([doc.ref.get(),db.collection('reservations').where('uid','==',doc.id).get(),dayDoc.ref.get(),db.collection('accountDeletionLocks').doc(doc.id).get()]);
       const profile=fresh.data(),todays=current.docs.map(d=>d.data()).filter(r=>r.dateKey===timing.date);
-      if(!profile||deleting.exists||!profile.email||!wantsReminder(profile,todays,latestDay.data()))counts.skipped++;
+      if(!profile||deleting.exists||!profile.email||!wantsReminder(profile,todays,latestDay.data(),timing.date))counts.skipped++;
       else {
        if(!localSchedule(kind,now()).allowed)return res.status(200).json({closed:true,...counts});
        const mail=reminderMail(doc.id,profile,timing.date,process.env.UNSUBSCRIBE_SECRET);
+       if(adminReminderTrial(profile,timing.date)){const note='PRUEBA PARA ADMINISTRADORES: este aviso verifica el envío de las 9:00. No indica el estado real de tu reserva.';mail.subject='Prueba para administradores · '+mail.subject;mail.text=note+'\n\n'+mail.text;mail.html='<p><strong>'+note+'</strong></p>'+mail.html;}
        counts[await send(db,sentKey,{from:sender,...mail})?'sent':'skipped']++;
        await pause(600);
       }
