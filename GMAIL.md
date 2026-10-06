@@ -77,3 +77,5 @@ Recordatorios: lunes a viernes, 09:00–09:59 Argentina, dirigidos a quienes no 
 ## Prueba de entrega a Sebastián
 
 GET `/api/email-test`, con la misma cabecera Authorization, envía exclusivamente a `sebastianezequielmedina@gmail.com`. No acepta destinatarios externos y funciona con `EMAIL_JOBS_ENABLED=false`. Registra la entrega con clave diaria: una repetición no vuelve a enviar si ya fue aceptada o el resultado quedó incierto. HTTP 200 con `sent:true` indica aceptación SMTP; comprobar bandeja y spam para confirmar recepción. Después restaurar las URLs de las tareas y mantenerlas desactivadas hasta completar la activación.
+
+GET `/api/email-test-excel`, con la misma autorización, envía el Excel del día solo a Sebastián, también con envíos generales desactivados y clave diaria independiente. Requiere el día cargado. El archivo se puede editar en Excel o importar en Google Sheets; no sincroniza las modificaciones con la app.
