@@ -154,8 +154,6 @@ function renderMenuDemo(screen,stage){
 
 function show(){
   const step=steps[index];
-  $('#profile-panel').hidden=step.selector!=='#profile-panel';
-  $('#profile-toggle').setAttribute('aria-expanded',String(!$('#profile-panel').hidden));
   target=$(step.selector);
   demo(step.demo);
   $('#tutorial-title').textContent=step.title;
@@ -184,7 +182,7 @@ trigger.addEventListener('click',()=>{
   steps=[];
   if(!$('#login-button').hidden)steps.push({selector:'#login-button',title:'Ingresá con Google',text:'Usá siempre la misma cuenta de Google. Al terminar el recorrido, tocá Ingresar con Google. Las demostraciones usan datos ficticios y no guardan reservas.',demo:'login'});
   steps.push(
-    {selector:'#profile-panel',title:'1. Completá tu perfil',text:'Abrí Mi perfil, completá nombre, condición y preferencias, y guardá. Al registrar tu primer perfil te enviamos una bienvenida: revisá Spam, marcá No es spam y agregá al comedor a tus contactos. Podés editar tus datos cuando quieras.',demo:'profile'},
+    {selector:'#profile-toggle',title:'1. Completá tu perfil',text:'Abrí la ventana centrada de Mi perfil, completá nombre, condición y preferencias, y guardá. Al registrar tu primer perfil te enviamos una bienvenida: revisá Spam, marcá No es spam y agregá al comedor a tus contactos. Podés editar tus datos cuando quieras.',demo:'profile'},
     {selector:'.menu-card',title:'2. Consultá el menú',text:'Ves el menú de la semana actual. Tocá la imagen para verla completa y otra vez para reducirla. Si falta, el comedor todavía debe publicarlo.',demo:'menuView'},
     {selector:'#day-list',title:'3. Elegí tus días',text:'Marcá uno o varios días de esta semana. Podés reservar solo un día o varios juntos. Los días bloqueados, sin habilitar o fuera de plazo no admiten reservas.',demo:'days'},
     {selector:'#day-list',title:'4. Turnos y porciones',text:'Elegí mediodía, noche o ambos: son los horarios de retiro. Pedí entre 1 y 2 porciones por día, sumando ambos turnos. Podés pedir 2 en uno o 1 en cada uno. Revisá las restricciones; una modalidad especial solo aparece en sus fechas habilitadas.',demo:'portions'},
@@ -194,7 +192,7 @@ trigger.addEventListener('click',()=>{
     {selector:'#save-button',title:'8. Guardá y comprobá',text:'Tocá Guardar reserva semanal y esperá la confirmación. Comprobá el resultado en Mis reservas. Si hay cambios sin guardar, todavía no se confirmaron.',demo:'save'},
     {selector:'#day-list',title:'9. Editá o minimizá tu día',text:'Una reserva confirmada se edita, sin duplicarla. Abrí Ver detalles, cambiá los datos y tocá Guardar cambios de mi reserva antes del cierre. Minimizar oculta los detalles y conserva la reserva.',demo:'edit'},
     {selector:'.reservation-footer',title:'10. Cancelá desde Mis reservas',text:'Antes de las 10:00 del día reservado, tocá Cancelar reserva y confirmá el día y turno. Cancela solo ese turno. Para recuperar un turno cancelado, contactá al comedor. Después del cierre, pedí la baja por WhatsApp al privado del comedor.',demo:'cancel'},
-    {selector:'#profile-panel',title:'11. Elegí si querés recordatorios',text:'En Mi perfil podés activar o desactivar Recibir recordatorios por correo y guardar. Los avisos están previstos de lunes a viernes a partir de las 9:00, cuando todavía no reservaste para ese día. También podés darte de baja desde el enlace del correo.',demo:'reminders'}
+    {selector:'#profile-toggle',title:'11. Elegí si querés recordatorios',text:'En Mi perfil podés activar o desactivar Recibir recordatorios por correo y guardar. Los avisos están previstos de lunes a viernes a partir de las 9:00, cuando todavía no reservaste para ese día. También podés darte de baja desde el enlace del correo.',demo:'reminders'}
   );
   if(wasAdmin)steps=[
     {selector:'.admin-week-toolbar',title:'1. Elegí la semana a gestionar',text:'Consultá semanas anteriores o prepará las próximas con Anterior, Siguiente o el selector de fecha. Volver a esta semana regresa a la actual. Revisá la semana elegida antes de habilitar días, cargar menú o crear modalidades.',demo:'adminWeek'},

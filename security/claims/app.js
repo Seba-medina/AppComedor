@@ -34,6 +34,7 @@ function renderAccess(){
   $('#profile-title').textContent=complete?'Mi perfil':'Completá tu registro';
   $('#profile-save').textContent=complete?'Guardar perfil':'Guardar y empezar';
   $('#profile-intro').textContent=complete?'Guardá tus datos y preferencias para completar tus reservas.':'Revisá tu nombre y elegí tu condición y preferencias. Después podés editarlas desde Mi perfil.';
+  if(complete&&!$('#profile-dialog').open)$('#profile-panel').hidden=true;
   if(signed&&profileLoaded&&!profile){$('#profile-panel').hidden=false;$('#profile-toggle').setAttribute('aria-expanded','true');}
 }
 
@@ -188,7 +189,7 @@ function watchMenu(){
   },e=>error(e));
 }
 function resetData(){
-  profileLoaded=false;menuUnsub?.();$('.menu-card img').hidden=true;$('.menu-card img').removeAttribute('src');
+  closeProfile();profileLoaded=false;menuUnsub?.();$('.menu-card img').hidden=true;$('.menu-card img').removeAttribute('src');
   document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());
   notGoingDates=new Set();responsesReady=false;responsesLoading=false;$('#welcome-message').hidden=true;$('#welcome-message').textContent='';$('#retry-welcome').hidden=true;$('#retry-welcome').disabled=false;
   weekTemplate=null;if($('#week-template-dialog').open)$('#week-template-dialog').close();
@@ -261,6 +262,7 @@ $('#profile-form').addEventListener('submit',e=>{e.preventDefault();action(async
   const name=$('#profile-name').value.trim();if(!name)throw new Error('Ingresá tu nombre y apellido.');
   await setDoc(doc(db,'users',user.uid),{name,condition:$('#profile-condition').value,diet:$('#profile-diet').value.trim(),email:user.email,reminderEmails:$('#profile-reminders').checked,updatedAt:serverTimestamp()});
   $('#profile-message').textContent='Perfil guardado. Las nuevas selecciones usarán estas preferencias.';$('#app-status').textContent='Perfil actualizado.';
+  if(!newProfile&&session===epoch)closeProfile();
   if(newProfile&&session===epoch)void requestWelcome();
 });});
 $('#retry-welcome').addEventListener('click',()=>{if(!$('#retry-welcome').disabled)void requestWelcome();});
@@ -374,7 +376,26 @@ document.querySelectorAll('.nav-button').forEach(b=>b.addEventListener('click',(
 }));
 $('#admin-days').addEventListener('click',e=>{const button=e.target.closest('[data-admin-date]');if(!isAdmin||!button)return;adminDate=button.dataset.adminDate;renderAdmin();});
 $('#download-day-pdf').addEventListener('click',()=>{if(!isAdmin||!adminReady||!adminRecordsReady)return;downloadPdf(dailyTableReport(adminDate,adminReservations,adminDays[adminDate],modalities), 'reservas-'+adminDate+'.pdf');});
-$('#profile-toggle').addEventListener('click',()=>{if(!user||!profile)return;const open=$('#profile-panel').hidden;$('#profile-panel').hidden=!open;$('#profile-toggle').setAttribute('aria-expanded',String(open));});
+function closeProfile(){
+  const dialog=$('#profile-dialog');
+  if(dialog.open)dialog.close();
+  $('.profile-toolbar').after($('#profile-panel'));
+  $('#profile-panel').hidden=!!profile||!user;
+  $('#profile-toggle').setAttribute('aria-expanded','false');
+  document.body.classList.remove('profile-modal-open');
+}
+$('#profile-toggle').addEventListener('click',()=>{
+  if(!user||!profile||$('#profile-dialog').open)return;
+  $('#profile-panel').hidden=false;
+  $('#profile-dialog').append($('#profile-panel'));
+  $('#profile-dialog').showModal();
+  $('#profile-toggle').setAttribute('aria-expanded','true');
+  document.body.classList.add('profile-modal-open');
+  $('#profile-name').focus({preventScroll:true});
+});
+$('#close-profile').addEventListener('click',closeProfile);
+$('#profile-dialog').addEventListener('close',closeProfile);
+$('#profile-dialog').addEventListener('click',e=>{if(e.target!==$('#profile-dialog'))return;const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeProfile();});
 $('.menu-card img').addEventListener('click',e=>e.target.classList.toggle('expanded'));
 rebuildWeekControls();watchMenu();renderDays();
 // Actualizar el corte sin reconstruir inputs mientras se escribe.

@@ -77,3 +77,13 @@
 #profile-save{width:100%;min-height:48px;border-radius:11px;margin-top:2px}
 #profile-message:empty,#welcome-message:empty{display:none}#profile-message{font-size:13px;line-height:1.5;margin:0}
 @media(max-width:600px){#inicio.registration-layout{min-height:calc(100svh - 200px);padding:24px 16px}.registration-layout .profile-panel{padding:24px 20px;border-radius:20px}#profile-title{font-size:23px}}
+
+/* Edición del perfil sin desplazar el contenido de la semana. */
+body.profile-modal-open{overflow:hidden}
+#profile-dialog{position:fixed;inset:0;margin:auto;width:min(560px,calc(100% - 32px));max-height:calc(100dvh - 40px);padding:0;border:1px solid #e5dfd0;border-radius:24px;background:#fffdf7;color:#123a2c;overflow:auto;box-shadow:0 24px 80px #062b2040}
+#profile-dialog::backdrop{background:#082d235c;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#profile-dialog .profile-panel{max-width:none;margin:0;padding:32px;border:0;border-radius:0;box-shadow:none}
+#close-profile{position:absolute;top:14px;right:14px;width:34px;height:34px;padding:0;border:1px solid #d7e2d3;border-radius:50%;background:#f0f5ed;color:#123a2c;cursor:pointer;font-size:17px}
+#close-profile:focus-visible{outline:2px solid #43805c;outline-offset:2px}
+#profile-dialog .profile-eyebrow{padding-right:30px}
+@media(max-width:600px){#profile-dialog{max-height:calc(100dvh - 24px);border-radius:20px}#profile-dialog .profile-panel{padding:28px 20px 24px}}
