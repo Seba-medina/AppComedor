@@ -83,3 +83,5 @@ GET `/api/email-test-excel`, con la misma autorización, envía el Excel del dí
 Para probar el Excel de mañana: `/api/email-test-excel?day=tomorrow`. Calcula mañana en Argentina, mantiene destinatario fijo y no altera el reporte diario. No acepta una fecha arbitraria.
 
 Las planillas incluyen fecha y hora original de creación de la reserva en Argentina (`createdAt`, no la última edición). Los registros sin esa fecha muestran Sin registro. La segunda versión de prueba de Excel tiene una clave independiente para comprobar esta columna sin activar los envíos generales.
+
+GET `/api/email-test-reminder` envía solo a Sebastián una muestra del recordatorio, claramente marcada PRUEBA. No comprueba elegibilidad ni reservas porque es una vista previa autorizada para el administrador. Usa su perfil real para el saludo y enlace de baja; requiere UNSUBSCRIBE_SECRET, no activa envíos generales y tiene clave diaria propia.

@@ -1,11 +1,11 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import {emailTest,emailTestExcel} from '../server/email-test.mjs';
+import {emailTest,emailTestExcel,emailTestReminder} from '../server/email-test.mjs';
 const response=()=>({code:200,setHeader(){},status(n){this.code=n;return this;},json(v){this.body=v;return this;}});
 test('Prueba protegida, destinatario fijo y envíos generales desactivados',async()=>{
- const keys=['CRON_SECRET','EMAIL_TRANSPORT','GMAIL_USER','GMAIL_APP_PASSWORD','EMAIL_JOBS_ENABLED'],previous=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+ const keys=['CRON_SECRET','EMAIL_TRANSPORT','GMAIL_USER','GMAIL_APP_PASSWORD','EMAIL_JOBS_ENABLED','UNSUBSCRIBE_SECRET'],previous=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
  try{
-  Object.assign(process.env,{CRON_SECRET:'test-secret-'.repeat(4),EMAIL_TRANSPORT:'gmail',GMAIL_USER:'comedorunerfcal@gmail.com',GMAIL_APP_PASSWORD:'abcdefghijklmnop',EMAIL_JOBS_ENABLED:'false'});
+  Object.assign(process.env,{CRON_SECRET:'test-secret-'.repeat(4),EMAIL_TRANSPORT:'gmail',GMAIL_USER:'comedorunerfcal@gmail.com',GMAIL_APP_PASSWORD:'abcdefghijklmnop',EMAIL_JOBS_ENABLED:'false',UNSUBSCRIBE_SECRET:'test-unsubscribe-'.repeat(3)});
   const calls=[],opts={getDb:()=>({}),now:()=>new Date('2026-10-05T22:00:00-03:00'),send:async(db,key,p)=>{calls.push({key,p});return calls.length===1;}};
   let r=response();await emailTest({method:'GET',headers:{}},r,opts);assert.equal(r.code,401);assert.equal(calls.length,0);
   const req={method:'GET',headers:{authorization:'Bearer '+process.env.CRON_SECRET},query:{to:'outsider@example.com'}};
@@ -22,5 +22,9 @@ test('Prueba protegida, destinatario fijo y envíos generales desactivados',asyn
 
   expectedDate='2026-10-06';r=response();await emailTestExcel({...req,query:{day:'tomorrow',to:'outsider@example.com',date:'2099-01-01'}},r,{...opts,getDb:()=>excelDb,send:async(db,key,p)=>{excelPayload=p;excelKey=key;return true;}});
   assert.equal(r.body.sent,true);assert.equal(excelKey,'gmail_excel_test_v2_2026-10-06');assert.equal(excelPayload.attachments[0].filename,'reservas-2026-10-06.xlsx');assert.deepEqual(excelPayload.to,['sebastianezequielmedina@gmail.com']);const tomorrowBook=new ExcelJS.Workbook();await tomorrowBook.xlsx.load(Buffer.from(excelPayload.attachments[0].content,'base64'));assert.equal(tomorrowBook.getWorksheet('Mediodía').getCell('A1').value,'Reservas del 2026-10-06');
+  const reminderDb={collection:name=>{assert.equal(name,'users');return {where:(field,op,email)=>{assert.equal(field,'email');assert.equal(email,'sebastianezequielmedina@gmail.com');return {limit:n=>{assert.equal(n,1);return {get:async()=>({empty:false,docs:[{id:'admin-uid',data:()=>({name:'Sebastián',email:'wrong@example.com'})}]})};}};}};}};
+  let reminderPayload,reminderKey;r=response();await emailTestReminder(req,r,{...opts,getDb:()=>reminderDb,send:async(db,key,p)=>{reminderPayload=p;reminderKey=key;return true;}});
+  assert.equal(r.body.sent,true);assert.equal(r.body.enabled,false);assert.deepEqual(reminderPayload.to,['sebastianezequielmedina@gmail.com']);assert.equal(reminderKey,'gmail_reminder_test_2026-10-05');assert.ok(reminderPayload.html.includes('Ir al comedor y reservar'));assert.ok(reminderPayload.text.includes('PRUEBA:'));assert.ok(reminderPayload.headers['List-Unsubscribe']);
+  const {reminderToken}=await import('../server/notifications.mjs');assert.ok(reminderPayload.text.includes(reminderToken('admin-uid',process.env.UNSUBSCRIBE_SECRET)));
  }finally{for(const k of keys)if(previous[k]===undefined)delete process.env[k];else process.env[k]=previous[k];}
 });
