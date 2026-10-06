@@ -47,5 +47,7 @@
     "api/email-check.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs",
+  "outputDirectory": "public"
 }
