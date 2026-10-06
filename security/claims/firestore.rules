@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && !exists(/databases/$(database)/documents/accountDeletionLocks/$(request.auth.uid));
+    }
+    function admin() {
+      return signedIn() && ('admin' in request.auth.token) && request.auth.token.admin == true
+        && exists(/databases/$(database)/documents/adminRoles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/adminRoles/$(request.auth.uid)).data.admin == true;
+    }
+    function removableAccount(uid) {
+      return uid != request.auth.uid
+        && (!exists(/databases/$(database)/documents/adminRoles/$(uid))
+          || get(/databases/$(database)/documents/adminRoles/$(uid)).data.admin != true);
+    }
+    match /adminRoles/{uid} {
+      allow get: if signedIn() && (uid == request.auth.uid || admin());
+      allow list: if admin();
+      allow write: if false;
+    }
+    match /accountDeletionLocks/{uid} {
+      allow create: if admin() && removableAccount(uid)
+        && request.resource.data.keys().hasOnly(['createdAt']) && request.resource.data.createdAt == request.time;
+      allow delete: if admin() && uid != request.auth.uid;
+      allow get: if admin();
+      allow list, update: if false;
+    }
+    function shortText(x,n) { return x is string && x.size() <= n; }
+    function dateStamp(key) {
+      let parts = key.split('-');
+      return timestamp.date(int(parts[0]),int(parts[1]),int(parts[2]));
+    }
+    function profileValid(d) {
+      return d.keys().hasAll(['name','condition','diet','email','updatedAt'])
+        && d.keys().hasOnly(['name','condition','diet','email','updatedAt','reminderEmails'])
+        && (!('reminderEmails' in d) || d.reminderEmails is bool)
+        && shortText(d.name,80) && d.name.size()>0
+        && d.condition in ['Alumno regular','Becario','Personal']
+        && shortText(d.diet,100) && d.email == request.auth.token.email
+        && d.updatedAt == request.time;
+    }
+    match /userActivity/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || admin());
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['lastSeen'])
+        && request.resource.data.lastSeen == request.time;
+      allow delete: if admin() && removableAccount(uid);
+    }
+    match /attendance/{id} {
+      allow read: if admin();
+      allow create, update: if admin()
+        && request.resource.data.keys().hasAll(['uid','dateKey','present','updatedBy','updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid','dateKey','present','updatedBy','updatedAt'])
+        && request.resource.data.uid is string && request.resource.data.dateKey is string
+        && request.resource.data.dateKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && id == request.resource.data.uid+'_'+request.resource.data.dateKey
+        && exists(/databases/$(database)/documents/users/$(request.resource.data.uid))
+        && exists(/databases/$(database)/documents/days/$(request.resource.data.dateKey))
+        && request.time >= dateStamp(request.resource.data.dateKey) + duration.value(3,'h')
+        && request.resource.data.present is bool
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if admin() && removableAccount(resource.data.uid);
+    }
+    match /users/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || admin());
+      allow create, update: if signedIn() && uid == request.auth.uid && profileValid(request.resource.data);
+      allow delete: if admin() && removableAccount(uid);
+    }
+    match /days/{key} {
+      function dayValid(d) {
+        return d.keys().hasAll(['week','blocked','generation','cutoff','reason','updatedAt','updatedBy'])
+          && d.keys().hasOnly(['week','blocked','generation','cutoff','reason','updatedAt','updatedBy'])
+          && key.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && d.week is string && d.week.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+          && dateStamp(key) >= dateStamp(d.week)
+          && dateStamp(key) <= dateStamp(d.week) + duration.value(4,'d')
+          && d.blocked is bool && d.generation is int && d.generation >= 0
+          && d.cutoff == dateStamp(key) + duration.value(13,'h')
+          && shortText(d.reason,160) && d.updatedAt == request.time
+          && d.updatedBy == request.auth.uid;
+      }
+      allow read: if signedIn();
+      allow create: if admin() && dayValid(request.resource.data)
+        && request.resource.data.generation == 0 && request.resource.data.blocked == false;
+      allow update: if admin() && dayValid(request.resource.data)
+        && request.resource.data.week == resource.data.week
+        && request.resource.data.generation == resource.data.generation
+          + ((!resource.data.blocked && request.resource.data.blocked) ? 1 : 0);
+      allow delete: if false;
+    }
+    match /modalities/{id} {
+      function valid(d) {
+        return d.keys().hasAll(['name','dates','active','updatedAt'])
+          && d.keys().hasOnly(['name','dates','active','updatedAt'])
+          && shortText(d.name,45) && d.name.size()>0 && d.active is bool
+          && d.dates is list && d.dates.size()>0 && d.dates.size()<=5
+          && d.updatedAt == request.time;
+      }
+      allow read: if signedIn();
+      allow create, update: if admin() && valid(request.resource.data);
+      allow delete: if admin();
+    }
+    match /menus/{week} {
+      allow get: if true;
+      allow list: if admin();
+      allow create, update: if admin()
+        && request.resource.data.keys().hasAll(['image','updatedAt'])
+        && request.resource.data.keys().hasOnly(['image','updatedAt'])
+        && week.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.image is string && request.resource.data.image.size()<=700000
+        && request.resource.data.image.matches('data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+')
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    match /reservations/{id} {
+      function dailyLimit(d) {
+        let otherShift = d.shift == 'mediodia' ? 'noche' : 'mediodia';
+        let otherId = d.uid+'_'+d.dateKey+'_'+otherShift+'_'+string(d.generation);
+        let other = getAfter(/databases/$(database)/documents/reservations/$(otherId)).data;
+        return other != null
+          && d.portions + (other.cancelled ? 0 : other.portions) <= 2
+          && d.portions + (other.cancelled ? 0 : other.portions) > 0;
+      }
+      function valid(d) {
+        let day = get(/databases/$(database)/documents/days/$(d.dateKey)).data;
+        let p = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return d.keys().hasAll(['uid','dateKey','week','shift','generation','portions','diet','name','condition','modalityId','cancelled','createdAt','updatedAt'])
+          && d.keys().hasOnly(['uid','dateKey','week','shift','generation','portions','diet','name','condition','modalityId','cancelled','createdAt','updatedAt'])
+          && d.uid == request.auth.uid && d.shift in ['mediodia','noche']
+          && d.generation is int && d.generation == day.generation
+          && id == d.uid+'_'+d.dateKey+'_'+d.shift+'_'+string(d.generation)
+          && !day.blocked && request.time < day.cutoff && d.week == day.week
+          && d.portions is int && d.portions>=0 && d.portions<=2 && dailyLimit(d)
+          && shortText(d.diet,100) && d.name==p.name && d.condition==p.condition
+          && shortText(d.modalityId,128)
+          && (d.modalityId == '' || (
+            get(/databases/$(database)/documents/modalities/$(d.modalityId)).data.active == true
+            && d.dateKey in get(/databases/$(database)/documents/modalities/$(d.modalityId)).data.dates))
+          && d.cancelled==false && d.updatedAt == request.time;
+      }
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || admin());
+      allow create: if signedIn() && valid(request.resource.data) && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && (
+        (valid(request.resource.data) && !resource.data.cancelled
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['portions','diet','modalityId','name','condition','updatedAt'])
+          && request.resource.data.createdAt == resource.data.createdAt)
+        || ((admin() || (resource.data.uid == request.auth.uid
+          && !resource.data.cancelled && resource.data.portions > 0
+          && !get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.blocked
+          && resource.data.generation == get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.generation
+          && request.time < get(/databases/$(database)/documents/days/$(resource.data.dateKey)).data.cutoff))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelled','updatedAt'])
+          && request.resource.data.cancelled == true && request.resource.data.updatedAt==request.time));
+      allow delete: if admin() && removableAccount(resource.data.uid);
+    }
+    match /reservationPreferences/{uid} {
+      allow read: if signedIn() && (uid == request.auth.uid || admin());
+      function validDay(d) {
+        return d is map && d.keys().hasAll(['mediodia','noche'])
+          && d.keys().hasOnly(['mediodia','noche'])
+          && d.mediodia is int && d.noche is int && d.mediodia>=0 && d.noche>=0
+          && d.mediodia+d.noche>=1 && d.mediodia+d.noche<=2;
+      }
+      function validSchedule(s) {
+        return s is map && s.keys().size()>0 && s.keys().hasOnly(['0','1','2','3','4'])
+          && (!('0' in s) || validDay(s['0'])) && (!('1' in s) || validDay(s['1']))
+          && (!('2' in s) || validDay(s['2'])) && (!('3' in s) || validDay(s['3']))
+          && (!('4' in s) || validDay(s['4']));
+      }
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && (('schedule' in request.resource.data
+          && request.resource.data.keys().hasOnly(['schedule','updatedAt'])
+          && validSchedule(request.resource.data.schedule))
+          || (!('schedule' in request.resource.data) && (request.resource.data.keys().hasOnly(['days','mediodia','noche','updatedAt'])
+        && request.resource.data.days is list && request.resource.data.days.size()>0
+        && request.resource.data.days.size()<=5 && request.resource.data.days.hasOnly([0,1,2,3,4])
+        && request.resource.data.days.toSet().size() == request.resource.data.days.size()
+        && request.resource.data.mediodia is int && request.resource.data.noche is int
+        && request.resource.data.mediodia>=0 && request.resource.data.noche>=0
+        && request.resource.data.mediodia+request.resource.data.noche>=1
+        && request.resource.data.mediodia+request.resource.data.noche<=2
+)));
+      allow delete: if admin() && removableAccount(uid);
+    }
+    match /auditLogs/{id} {
+      allow read: if admin();
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['actorUid','actorEmail','event','target','detail','createdAt'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorEmail == request.auth.token.email
+        && shortText(request.resource.data.event,80) && request.resource.data.event.size()>0
+        && shortText(request.resource.data.target,200) && shortText(request.resource.data.detail,200)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

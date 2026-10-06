@@ -1,0 +1,42 @@
+[
+  {
+    "target": "app.js",
+    "source": "security/claims/app.js",
+    "originalBlobSha": "1fdeab0dca7e9740aab3058e3fb5e795751bb80a"
+  },
+  {
+    "target": "domain.mjs",
+    "source": "security/claims/domain.mjs",
+    "originalBlobSha": "79af80fc6edda637dc595d47cb7cad4a75544028"
+  },
+  {
+    "target": "management.mjs",
+    "source": "security/claims/management.mjs",
+    "originalBlobSha": "032f9384082728d936f91a7fd7e2d75ce651a2f6"
+  },
+  {
+    "target": "firestore.rules",
+    "source": "security/claims/firestore.rules",
+    "originalBlobSha": "452ae501e9b41a7dcc43772f5a1e2c49baafcfcd"
+  },
+  {
+    "target": "firestore-completo-2026-10-05-correos.rules",
+    "source": "security/claims/firestore.rules",
+    "originalBlobSha": "452ae501e9b41a7dcc43772f5a1e2c49baafcfcd"
+  },
+  {
+    "target": "server/notifications.mjs",
+    "source": "security/claims/server/notifications.mjs",
+    "originalBlobSha": "041489c44fcc6cf1a430aa952a05100fd51f916c"
+  },
+  {
+    "target": "server/email-test.mjs",
+    "source": "security/claims/server/email-test.mjs",
+    "originalBlobSha": "63c4e2b70b72e3e1aa329a9566586fba1b3f2281"
+  },
+  {
+    "target": "server/email-job.mjs",
+    "source": "security/claims/server/email-job.mjs",
+    "originalBlobSha": "8ed0ff0fa918cb029120cbcbc805215c0edba5e9"
+  }
+]

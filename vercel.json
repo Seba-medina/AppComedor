@@ -48,6 +48,6 @@
       "maxDuration": 60
     }
   },
-  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs",
+  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs tests/admin-claims.test.mjs",
   "outputDirectory": "public"
 }
