@@ -1,4 +1,4 @@
-import {reminderMail} from './notifications.mjs';
+import {reminderMail,reportMail} from './notifications.mjs';
 import {dailyWorkbook} from './workbook.mjs';
 import {validCronAuth} from './cron-auth.mjs';
 import {adminDb} from './firebase-admin.mjs';
@@ -21,7 +21,8 @@ export async function emailTest(req,res,{getDb=adminDb,send=deliver,now=()=>new 
    const names=new Map(modalities.docs.map(d=>[d.id,d.data().name]));
    const records=snapshot.docs.map(d=>{const r=d.data();return {...r,modalityName:r.modalityId?(names.get(r.modalityId)||'Modalidad eliminada'):'Habitual'};});
    const content=(await dailyWorkbook(date,records,day,now())).toString('base64');
-   payload={...payload,subject:'Prueba de Excel · Reservas del '+date,text:'Adjuntamos las reservas del día en un Excel editable, con hojas de Mediodía, Noche y Resumen. Podés completar la columna Asistió en Excel o importar el archivo en Google Sheets. Es una copia: los cambios no se guardan en la app. Esta prueba no activa los envíos automáticos.',attachments:[{filename:'reservas-'+date+'.xlsx',content}]};
+   const report=reportMail(ADMIN_EMAIL,date,content),note='PRUEBA: este envío no activa los correos automáticos.';
+   payload={...payload,...report,subject:'Prueba · '+report.subject,text:note+'\n\n'+report.text,html:'<p><strong>'+note+'</strong></p>'+report.html};
   }
   if(kind==='reminder'){
    const users=await db.collection('users').where('email','==',ADMIN_EMAIL).limit(1).get();

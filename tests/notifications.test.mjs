@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import {localSchedule,wantsReminder,reminderToken,tokenUid,reminderMail} from '../server/notifications.mjs';
+import {localSchedule,wantsReminder,reminderToken,tokenUid,reminderMail,reportMail} from '../server/notifications.mjs';
 import {dailyWorkbook} from '../server/workbook.mjs';
 import {deliver,emailJob} from '../server/email-job.mjs';
 import unsubscribe from '../api/unsubscribe.js';
@@ -85,3 +85,8 @@ test('Gmail limita la espera SMTP y cierra el transporte sin reenviar',async()=>
 });
 
 test('El recordatorio corresponde a la reserva de hoy',()=>{assert.ok(reminderMail('u',profile,'2026-10-05',secret).text.includes('hoy (2026-10-05)'));});
+
+test('Textos finales identifican comedor, corte, baja y edición de la planilla',()=>{
+ const reminder=reminderMail('u',profile,'2026-10-06',secret),report=reportMail('admin@example.com','2026-10-06','excel-base64');
+ assert.equal(reminder.subject,'Recordatorio de reserva · Comedor UNER');assert.ok(reminder.text.includes('10:00 (hora de Argentina)'));assert.ok(reminder.text.includes('Mi perfil'));assert.ok(report.text.includes('columna Asistió'));assert.ok(report.text.includes('no se guardan en la app'));assert.equal(report.attachments[0].filename,'reservas-2026-10-06.xlsx');assert.ok(!report.text.includes('PRUEBA'));assert.ok(!reminder.text.includes('PRUEBA'));
+});

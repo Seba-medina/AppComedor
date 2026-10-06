@@ -3,7 +3,7 @@ import {validCronAuth} from './cron-auth.mjs';
 import {FieldValue} from 'firebase-admin/firestore';
 import {ADMIN_EMAILS} from '../domain.mjs';
 import {adminDb} from './firebase-admin.mjs';
-import {localSchedule,wantsReminder,reminderMail} from './notifications.mjs';
+import {localSchedule,wantsReminder,reminderMail,reportMail} from './notifications.mjs';
 import {GMAIL_SENDER,gmailConfigured,sendGmail} from './gmail.mjs';
 import {dailyWorkbook} from './workbook.mjs';
 const id=value=>createHash('sha256').update(value).digest('hex');
@@ -49,7 +49,7 @@ export async function emailJob(req,res,kind,{getDb=adminDb,now=()=>new Date(),cl
    const snapshot=await db.collection('reservations').where('dateKey','==',timing.date).get(),records=snapshot.docs.map(d=>d.data());
    const modalities=await db.collection('modalities').get(),names=new Map(modalities.docs.map(d=>[d.id,d.data().name]));
    const content=(await dailyWorkbook(timing.date,records.map(r=>({...r,modalityName:r.modalityId?(names.get(r.modalityId)||'Modalidad eliminada'):'Habitual'})),day)).toString('base64');
-   let attempted=false;for(const email of ADMIN_EMAILS){const key='report_'+timing.date+'_'+id(email),previous=(await db.collection('emailDeliveries').doc(id(key)).get()).data();if(['sent','sending','uncertain'].includes(previous?.state)){counts.skipped++;continue;}if(attempted||clock()-began>=10000)return res.status(200).json({more:true,...counts});attempted=true;await pause(600);const payload={from:sender,to:[email],subject:'Reservas del comedor · '+timing.date,text:'Adjuntamos las reservas y porciones del día. La planilla refleja los datos al generarla. Consultá el panel por cambios posteriores.',attachments:[{filename:'reservas-'+timing.date+'.xlsx',content}]};counts[await send(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
+   let attempted=false;for(const email of ADMIN_EMAILS){const key='report_'+timing.date+'_'+id(email),previous=(await db.collection('emailDeliveries').doc(id(key)).get()).data();if(['sent','sending','uncertain'].includes(previous?.state)){counts.skipped++;continue;}if(attempted||clock()-began>=10000)return res.status(200).json({more:true,...counts});attempted=true;await pause(600);const payload={from:sender,...reportMail(email,timing.date,content)};counts[await send(db,'report_'+timing.date+'_'+id(email),payload)?'sent':'skipped']++;}
   }else if(!day.blocked){
    const progressRef=db.collection('emailJobProgress').doc('reminders_'+timing.date),progress=(await progressRef.get()).data();
    if(progress?.done)return res.status(200).json({done:true,...counts});

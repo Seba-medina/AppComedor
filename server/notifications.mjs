@@ -22,7 +22,7 @@ export function tokenUid(token,secret){
 export const htmlEscape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function reminderMail(uid,profile,date,secret){
  const unsubscribe=APP_URL+'/api/unsubscribe?token='+encodeURIComponent(reminderToken(uid,secret));
- return {to:[profile.email],headers:{'List-Unsubscribe':'<'+unsubscribe+'>'},subject:'Recordatorio: reservá tu comida de hoy',text:`Hola ${profile.name}. Todavía no tenés una reserva para hoy (${date}). Si vas al comedor, reservá antes de las 10:00: ${APP_URL}\nSi no vas, podés ignorar este correo.\nDesactivar recordatorios: ${unsubscribe}`,html:`<p>Hola ${htmlEscape(profile.name)}.</p><p>Todavía no tenés una reserva para hoy (${date}). Si vas al comedor, reservá antes de las <strong>10:00</strong>.</p><p><a href="${APP_URL}">Ir al comedor y reservar</a></p><p>Si no vas, podés ignorar este correo.</p><p><a href="${unsubscribe}">Desactivar recordatorios</a>. También podés cambiarlos desde Mi perfil.</p>`};
+ return {to:[profile.email],headers:{'List-Unsubscribe':'<'+unsubscribe+'>'},subject:'Recordatorio de reserva · Comedor UNER',text:`Hola ${profile.name}. Todavía no registraste tu reserva para hoy (${date}). Si vas al comedor, reservá antes de las 10:00 (hora de Argentina): ${APP_URL}\nSi hoy no vas al comedor, podés ignorar este mensaje.\nPodés desactivar estos recordatorios desde Mi perfil o en este enlace: ${unsubscribe}`,html:`<p>Hola ${htmlEscape(profile.name)}.</p><p>Todavía no registraste tu reserva para hoy (${date}). Si vas al comedor, reservá antes de las <strong>10:00 (hora de Argentina)</strong>.</p><p><a href="${APP_URL}">Reservar mi comida</a></p><p>Si hoy no vas al comedor, podés ignorar este mensaje.</p><p><a href="${unsubscribe}">Desactivar recordatorios</a>. También podés desactivarlos desde Mi perfil.</p>`};
 }
 export function reservationCreatedLabel(value){
  const date=typeof value?.toDate==='function'?value.toDate():value instanceof Date?value:null;
@@ -30,3 +30,18 @@ export function reservationCreatedLabel(value){
  return new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(date);
 }
 export function reportRows(records,day){return records.filter(r=>reservationStatus(r,day)==='Confirmada').sort((a,b)=>a.name.localeCompare(b.name,'es')).map(r=>[r.name,r.condition,r.portions,r.diet,r.modalityName||'Habitual',reservationCreatedLabel(r.createdAt)]);}
+
+export function reportMail(email,date,content){
+ const text=`Hola.
+
+Adjuntamos la planilla de reservas del comedor para el ${date}.
+
+Incluye las hojas Mediodía, Noche y Resumen, con las porciones, las preferencias alimentarias y la fecha y hora de cada reserva.
+
+Podés abrir y editar el archivo en Excel o Google Sheets, y completar la columna Asistió para registrar la asistencia.
+
+La planilla refleja las reservas al momento de generarla. Las modificaciones en el archivo no se guardan en la app; consultá el panel por cambios posteriores.
+
+Comedor UNER`;
+ return {to:[email],subject:'Reservas del comedor · '+date,text,html:text.split('\n\n').map(p=>'<p>'+htmlEscape(p).replace(/\n/g,'<br>')+'</p>').join(''),attachments:[{filename:'reservas-'+date+'.xlsx',content}]};
+}
