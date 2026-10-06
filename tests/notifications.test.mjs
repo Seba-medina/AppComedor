@@ -5,11 +5,11 @@ import {dailyWorkbook} from '../server/workbook.mjs';
 import {deliver,emailJob} from '../server/email-job.mjs';
 import unsubscribe from '../api/unsubscribe.js';
 const secret='test-only-secret-'.repeat(3),day={blocked:false,generation:2},profile={email:'alumno@example.com',name:'José <script>'};
-test('Horarios argentinos: recordatorio domingo a jueves para mañana y Excel lunes a viernes',()=>{
+test('Horarios argentinos: recordatorio lunes a viernes para hoy y Excel después del corte',()=>{
  for(const [kind,time,allowed] of [['reminders','2026-10-05T08:59:00-03:00',false],['reminders','2026-10-05T09:00:00-03:00',true],['reminders','2026-10-05T09:59:59-03:00',true],['reminders','2026-10-05T10:00:00-03:00',false],['report','2026-10-05T10:04:00-03:00',false],['report','2026-10-05T10:05:00-03:00',true],['report','2026-10-10T10:05:00-03:00',false]])assert.equal(localSchedule(kind,new Date(time)).allowed,allowed);
- assert.deepEqual(localSchedule('reminders',new Date('2026-10-04T09:00:00-03:00')),{date:'2026-10-05',allowed:true});
- assert.equal(localSchedule('reminders',new Date('2026-10-09T09:00:00-03:00')).allowed,false);
- assert.equal(localSchedule('reminders',new Date('2026-10-08T09:00:00-03:00')).date,'2026-10-09');
+ assert.deepEqual(localSchedule('reminders',new Date('2026-10-04T09:00:00-03:00')),{date:'2026-10-04',allowed:false});
+ assert.equal(localSchedule('reminders',new Date('2026-10-09T09:00:00-03:00')).allowed,true);
+ assert.equal(localSchedule('reminders',new Date('2026-10-08T09:00:00-03:00')).date,'2026-10-08');
  assert.equal(localSchedule('report',new Date('2026-10-09T10:05:00-03:00')).allowed,true);
  assert.equal(localSchedule('report',new Date('2026-10-04T10:05:00-03:00')).allowed,false);
 });
@@ -84,4 +84,4 @@ test('Gmail limita la espera SMTP y cierra el transporte sin reenviar',async()=>
  assert.equal(calls,1);assert.equal(closed,1);
 });
 
-test('El domingo se abre la próxima semana para reservar el lunes',async()=>{const {reservationWeek}=await import('../domain.mjs');assert.equal(reservationWeek(new Date('2026-10-04T09:00:00-03:00')),'2026-10-05');assert.equal(reservationWeek(new Date('2026-10-09T09:00:00-03:00')),'2026-10-05');assert.equal(reservationWeek(new Date('2026-12-27T09:00:00-03:00')),'2026-12-28');assert.ok(reminderMail('u',profile,'2026-10-05',secret).text.includes('mañana (2026-10-05)'));});
+test('El recordatorio corresponde a la reserva de hoy',()=>{assert.ok(reminderMail('u',profile,'2026-10-05',secret).text.includes('hoy (2026-10-05)'));});

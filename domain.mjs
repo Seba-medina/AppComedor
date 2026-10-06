@@ -13,11 +13,6 @@ export function monday(now = new Date()) {
   d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
   return dateKey(d);
 }
-export function reservationWeek(now = new Date()) {
- const d=new Date(argentinaToday(now)+'T12:00:00-03:00');
- if(new Date(argentinaToday(now)+'T00:00:00Z').getUTCDay()===0)d.setTime(d.getTime()+86400000);
- return monday(d);
-}
 export function weekDays(start) {
   const d = new Date(start + 'T00:00:00Z');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || Number.isNaN(d.getTime()) || dateKey(d)!==start || d.getUTCDay()!==1) throw new Error('Elegí el lunes de la semana.');

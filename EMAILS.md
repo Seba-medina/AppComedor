@@ -9,7 +9,7 @@ Implementación preparada; no se enviaron correos reales. No activar `EMAIL_JOBS
 - Excel `.xlsx` solo a Sebastián y María Laura, los administradores de `domain.mjs`.
 - Recordatorios para todos los perfiles registrados sin reserva, excepto administradores y quienes desactivaron `reminderEmails`. Los perfiles anteriores tienen recordatorios habilitados por defecto.
 - No recuerda días sin habilitar, bloqueados, sábados ni domingos. Una reserva activa en cualquier turno o una cancelación expresa en la generación vigente evita el recordatorio. Reserva de generaciones anteriores no cuenta.
-- Hora de Argentina: recordatorios de domingo a jueves entre 09:00 y antes de 10:00 para el día siguiente; reporte a partir de 10:05. No acepta fecha, destinatario ni contenido externo: calcula el día en el servidor.
+- Hora de Argentina: recordatorios de lunes a viernes entre 09:00 y antes de 10:00 para el mismo día; reporte a partir de 10:05. No acepta fecha, destinatario ni contenido externo: calcula el día en el servidor.
 - Mi perfil permite desactivar y reactivar; el enlace firmado del correo abre una confirmación. Solo POST desactiva, para que los escáneres de enlaces no den de baja automáticamente.
 - El proveedor recibe un correo individual por alumno; no se comparte una lista de destinatarios. Dos correos individuales con el mismo Excel para administradores.
 
@@ -74,4 +74,4 @@ El respaldo manual sigue incluyendo perfiles y su opción de correo. No exporta 
 
 Documentación: https://resend.com/docs/api-reference/emails/send-email · https://resend.com/docs/dashboard/emails/idempotency-keys · https://vercel.com/docs/cron-jobs/manage-cron-jobs
 
-Recordatorios: domingo a jueves, 09:00–09:59 Argentina, dirigidos a quienes no reservaron para mañana. Excel: lunes a viernes, 10:05–10:59, reservas del día. Los domingos la app muestra la próxima semana para permitir reservar el lunes.
+Recordatorios: lunes a viernes, 09:00–09:59 Argentina, dirigidos a quienes no reservaron para hoy. Excel: lunes a viernes, 10:05–10:59, reservas del día.

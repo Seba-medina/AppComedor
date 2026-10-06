@@ -14,7 +14,7 @@ await db.collection('reservations').doc('e-day').set({uid:'e',dateKey:'2026-10-0
 const original=global.fetch,requests=[];let tick=0,partial=true;
 global.fetch=async(url,opts)=>{assert.equal(url,'https://api.resend.com/emails');requests.push(JSON.parse(opts.body));return {ok:true,json:async()=>({id:'simulated-'+requests.length})};};
 try{
- const opts={getDb:()=>db,now:()=>new Date('2026-10-04T09:00:00-03:00'),clock:()=>tick,pause:async()=>{if(partial)tick=40000;}};
+ const opts={getDb:()=>db,now:()=>new Date('2026-10-05T09:00:00-03:00'),clock:()=>tick,pause:async()=>{if(partial)tick=40000;}};
  let res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,200);assert.equal(res.body.more,true);assert.equal(requests.length,1);
  const cursor=(await db.collection('emailJobProgress').doc('reminders_2026-10-05').get()).data();assert.equal(cursor.lastUid,'a');
  partial=false;tick=0;res=response();await emailJob(req,res,'reminders',opts);assert.equal(res.code,200);assert.equal(requests.length,2);assert.deepEqual(requests.map(r=>r.to[0]),['a@example.com','b@example.com']);
@@ -27,7 +27,7 @@ try{
  res=response();await emailJob(req,res,'report',{...opts,now:()=>new Date('2026-10-05T10:06:00-03:00')});assert.equal(requests.length,4);
  process.env.EMAIL_TRANSPORT='gmail';process.env.GMAIL_USER='comedorunerfcal@gmail.com';process.env.GMAIL_APP_PASSWORD='abcdefghijklmnop';
  await db.collection('days').doc('2026-10-06').set({generation:0,blocked:false});
- const gmailRequests=[],gmailOpts={...opts,now:()=>new Date('2026-10-05T09:00:00-03:00'),send:(db,key,payload)=>deliver(db,key,payload,{smtpSend:async(p)=>{gmailRequests.push(p);return {messageId:'simulated-gmail-'+gmailRequests.length};}})};
+ const gmailRequests=[],gmailOpts={...opts,now:()=>new Date('2026-10-06T09:00:00-03:00'),send:(db,key,payload)=>deliver(db,key,payload,{smtpSend:async(p)=>{gmailRequests.push(p);return {messageId:'simulated-gmail-'+gmailRequests.length};}})};
  res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(res.code,200);assert.deepEqual(gmailRequests.map(p=>p.to[0]),['a@example.com','d@example.com','e@example.com']);
  assert.equal(gmailRequests[0].from,'Comedor UNER <comedorunerfcal@gmail.com>');
  res=response();await emailJob(req,res,'reminders',gmailOpts);assert.equal(gmailRequests.length,3);
