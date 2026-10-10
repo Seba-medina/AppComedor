@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {checkAppRequest,limitStudentRequests} from './request-security.mjs';
 import {FieldValue} from 'firebase-admin/firestore';
 import {adminDb,adminAuth} from './firebase-admin.mjs';
 import {argentinaToday,monday,weekDays,deadline,reservationId,reservationStatus,SHIFTS} from '../domain.mjs';
@@ -15,7 +16,7 @@ export async function studentIdentity(req,verify=token=>adminAuth().verifyIdToke
  if(typeof authorization!=='string'||authorization.length>10000||!authorization.startsWith('Bearer '))throw failure(401,'Iniciá sesión para continuar.');
  let identity;
  try{identity=await verify(authorization.slice(7));}catch{throw failure(401,'Volvé a iniciar sesión para continuar.');}
- if(!identity?.uid||identity.uid.includes('/')||identity.uid.length>128||identity.email_verified!==true||identity.firebase?.sign_in_provider!=='google.com'||typeof identity.email!=='string')throw failure(403,'Usá una cuenta de Google verificada.');
+ if(typeof identity?.uid!=='string'||!identity.uid||identity.uid.includes('/')||identity.uid.length>128||identity.email_verified!==true||identity.firebase?.sign_in_provider!=='google.com'||typeof identity.email!=='string'||identity.email.length>320)throw failure(403,'Usá una cuenta de Google verificada.');
  return identity;
 }
 function parseBody(req,keys){
@@ -24,17 +25,19 @@ function parseBody(req,keys){
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!keys.includes(k)))throw failure(400,'Solicitud inválida.');
  return body;
 }
-function respondError(res,error){return res.status(error.status||503).json({error:error.status?error.message:'No pudimos completar la operación. Intentá nuevamente.'});}
+function respondError(res,error){if(error.retryAfter)res.setHeader('Retry-After',String(error.retryAfter));return res.status(error.status||503).json({error:error.status?error.message:'No pudimos completar la operación. Intentá nuevamente.'});}
 function currentChoices(data,week){return data?.week===week&&Array.isArray(data.notGoingDates)?data.notGoingDates.filter(d=>weekDays(week).includes(d)):[];}
 
 export async function dayResponse(req,res,{getDb=adminDb,verify,now=()=>new Date()}={}){
  res.setHeader('Cache-Control','no-store');
  if(!['GET','POST'].includes(req.method))return res.status(405).json({error:'Método no permitido.'});
  try{
-  const identity=await studentIdentity(req,verify),db=getDb(),week=monday(now()),ref=db.collection('dayResponses').doc(identity.uid);
+  const identity=await studentIdentity(req,verify);await checkAppRequest(req);
+  const db=getDb(),week=monday(now()),ref=db.collection('dayResponses').doc(identity.uid);
+  await limitStudentRequests(db,identity.uid,req.method==='GET'?'choicesRead':'choicesWrite',now());
   if(req.method==='GET'){
    const [profile,deleting,state]=await Promise.all([db.collection('users').doc(identity.uid).get(),db.collection('accountDeletionLocks').doc(identity.uid).get(),ref.get()]);
-   if(!profile.exists||deleting.exists)throw failure(403,'Completá tu perfil para continuar.');
+   if(!profile.exists||deleting.exists||profile.data().email!==identity.email)throw failure(403,'Completá tu perfil para continuar.');
    return res.status(200).json({week,notGoingDates:currentChoices(state.data(),week)});
   }
   const body=parseBody(req,['date','choice','confirmCancel']);
@@ -62,10 +65,11 @@ export async function welcomeEmail(req,res,{getDb=adminDb,verify,send=deliver,no
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='POST')return res.status(405).json({error:'Método no permitido.'});
  try{
-  const identity=await studentIdentity(req,verify);parseBody(req,[]);
+  const identity=await studentIdentity(req,verify);await checkAppRequest(req);parseBody(req,[]);
   const transport=process.env.EMAIL_TRANSPORT||'resend';
   if(transport==='gmail'?!gmailConfigured():transport!=='resend'||!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)throw failure(503,'El correo de bienvenida no está disponible. Intentá más tarde.');
-  const db=getDb(),key='welcome_v1_'+hash(identity.uid),delivery=db.collection('emailDeliveries').doc(hash(key));
+  const db=getDb();await limitStudentRequests(db,identity.uid,'welcome',now());
+  const key='welcome_v1_'+hash(identity.uid),delivery=db.collection('emailDeliveries').doc(hash(key));
   const [profile,deleting,previous]=await Promise.all([db.collection('users').doc(identity.uid).get(),db.collection('accountDeletionLocks').doc(identity.uid).get(),delivery.get()]);
   if(!profile.exists||deleting.exists||profile.data().email!==identity.email)throw failure(403,'Guardá tu perfil antes de solicitar la bienvenida.');
   if(['sent','sending','uncertain'].includes(previous.data()?.state))return res.status(200).json({state:previous.data().state,alreadyProcessed:true});

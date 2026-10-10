@@ -25,5 +25,8 @@ try{
  r=response();await emailJob({method:'GET',headers:{authorization:'Bearer '+process.env.CRON_SECRET}},r,'reminders',{getDb:()=>db,now:()=>new Date('2026-10-06T09:00:00-03:00'),send,pause:async()=>{}});assert.equal(r.code,200);assert.deepEqual(sent.map(p=>p.to[0]),[identity.email,'other@example.com']);
  r=response();await dayResponse({...req(undefined),method:'GET'},r,options);assert.deepEqual(r.body.notGoingDates,['2026-10-06']);
  r=response();await dayResponse(req({date:'2026-10-06',choice:'clear'}),r,options);assert.deepEqual(r.body.notGoingDates,[]);
+ for(let i=0;i<3;i++){r=response();await welcomeEmail(req({}),r,{...options,send});assert.equal(r.code,200);}
+ r=response();await welcomeEmail(req({}),r,{...options,send});assert.equal(r.code,429);assert.equal(sent.filter(p=>p.to[0]===identity.email).length,1);
+ const limits=await db.collection('requestLimits').get();assert.equal(limits.size,3);assert(limits.docs.every(d=>d.data().expiresAt.toMillis()>now().getTime()));
  console.log('OK: real Firestore transactions, both-turn cancellation, once-only welcome and reminder exclusion; SMTP simulated.');
 }finally{await db.terminate();}

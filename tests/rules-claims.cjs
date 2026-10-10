@@ -38,13 +38,15 @@ const assert=require('node:assert/strict');
   await assertFails(rawSetDoc(doc(admin,'adminRoles','student'),{admin:true}));
   await assertFails(deleteDoc(doc(admin,'adminRoles','admin2')));
   await assertFails(setDoc(doc(guest,'users','student'),profile));
+  await assertFails(getDoc(doc(guest,'menus',future)));
+  await assertSucceeds(getDoc(doc(student,'menus',future)));
   await assertSucceeds(setDoc(doc(student,'users','student'),profile));
   await assertFails(setDoc(doc(student,'users','student'),{...profile,role:'admin'}));
   await assertSucceeds(rawSetDoc(doc(student,'users','student'),{...profile,reminderEmails:false}));
   await assertFails(rawSetDoc(doc(student,'users','student'),{...profile,reminderEmails:'false'}));
   await assertFails(rawSetDoc(doc(other,'users','student'),{...profile,reminderEmails:false}));
   await assertSucceeds(rawSetDoc(doc(student,'users','student'),profile));
-  for(const name of ['emailDeliveries','emailJobProgress','emailJobLocks','dayResponses','emailRateLimits','emailWelcomeRequests']){
+  for(const name of ['emailDeliveries','emailJobProgress','emailJobLocks','dayResponses','emailRateLimits','emailWelcomeRequests','requestLimits']){
    await assertFails(rawSetDoc(doc(student,name,'fake'),{state:'sent'}));
    await assertFails(getDocs(collection(student,name)));
    await assertFails(rawSetDoc(doc(admin,name,'fake'),{state:'sent'}));
@@ -101,7 +103,7 @@ const assert=require('node:assert/strict');
   }
   await assertSucceeds(batch.commit());
   assert.equal((await getDocs(query(collection(weeklyUser,'reservations'),where('uid','==','weekly')))).size,10);
-  await assertSucceeds(getDoc(doc(guest,'menus',future)));
+  await assertFails(getDoc(doc(guest,'menus',future)));
   await assertFails(getDocs(collection(guest,'menus')));
   await assertFails(getDocs(collection(student,'menus')));
   const passwordAdmin=env.authenticatedContext('passwordadmin',{email:'sebastianezequielmedina@gmail.com',email_verified:true,firebase:{sign_in_provider:'password'}}).firestore();

@@ -12,8 +12,10 @@ const app=initializeApp({
   appId:'1:258857082564:web:077fd0da43f87dbdecf391'
 });
 // Inicializar antes de Auth/Firestore; activar enforcement solo tras verificar métricas.
+let appCheck=null;
 if(RECAPTCHA_ENTERPRISE_SITE_KEY){
   const {initializeAppCheck,ReCaptchaEnterpriseProvider}=await import('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js');
-  initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY),isTokenAutoRefreshEnabled:true});
+  appCheck=initializeAppCheck(app,{provider:new ReCaptchaEnterpriseProvider(RECAPTCHA_ENTERPRISE_SITE_KEY),isTokenAutoRefreshEnabled:true});
 }
+export {appCheck};
 export const auth=getAuth(app), db=getFirestore(app);

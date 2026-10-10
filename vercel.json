@@ -26,6 +26,10 @@
         {
           "key": "Cross-Origin-Opener-Policy",
           "value": "same-origin-allow-popups"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
         }
       ]
     }
@@ -54,6 +58,6 @@
       "maxDuration": 30
     }
   },
-  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs tests/admin-claims.test.mjs tests/student-messages.test.mjs",
+  "buildCommand": "node scripts/build-public.mjs && node --test tests/public-output.test.mjs tests/admin-claims.test.mjs tests/student-messages.test.mjs tests/request-security.test.mjs && node scripts/scan-secrets.mjs",
   "outputDirectory": "public"
 }

@@ -6,6 +6,8 @@ import {deliver} from '../server/email-job.mjs';
 import {wantsReminder,welcomeMail} from '../server/notifications.mjs';
 import {reservationId} from '../domain.mjs';
 
+// App Check enforcement has its own isolated tests; never use live attestation here.
+process.env.APP_CHECK_ENFORCED='false';
 const now=()=>new Date('2026-10-06T08:30:00-03:00');
 const identity={uid:'student',email:'student@example.com',email_verified:true,firebase:{sign_in_provider:'google.com'}};
 const verify=async token=>{assert.equal(token,'valid');return identity;};

@@ -17,12 +17,12 @@
   {
     "target": "firestore.rules",
     "source": "security/claims/firestore.rules",
-    "originalBlobSha": "452ae501e9b41a7dcc43772f5a1e2c49baafcfcd"
+    "originalBlobSha": "aa2a051dab3035372c7cc6a886e3321bf4d751db"
   },
   {
     "target": "firestore-completo-2026-10-05-correos.rules",
     "source": "security/claims/firestore.rules",
-    "originalBlobSha": "452ae501e9b41a7dcc43772f5a1e2c49baafcfcd"
+    "originalBlobSha": "aa2a051dab3035372c7cc6a886e3321bf4d751db"
   },
   {
     "target": "server/notifications.mjs",

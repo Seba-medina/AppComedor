@@ -9,3 +9,10 @@ node_modules/
 
 # Local safety copy before role migration
 /.claims-migration-backup/
+
+# Private certificates and service-account downloads
+*.pem
+*.key
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
