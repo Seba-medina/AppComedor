@@ -11,7 +11,7 @@
     "uuid": "11.1.1"
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node scripts/build-public.mjs && node --test tests/*.test.mjs",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "security:audit": "npm audit --omit=dev --audit-level=moderate"
   }
